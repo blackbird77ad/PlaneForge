@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="PlaneForge icon">
+  <rect width="512" height="512" rx="96" fill="#061b3b"/>
+  <path fill="#ffffff" d="M128 126h147c63 0 107 39 107 99s-44 100-107 100h-58v61h-89V126Zm89 73v54h50c17 0 28-11 28-27s-11-27-28-27h-50Z"/>
+  <path fill="#ff4b12" d="M317 313h67v73h-67z"/>
+</svg>

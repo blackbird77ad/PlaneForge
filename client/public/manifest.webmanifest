@@ -1,0 +1,17 @@
+{
+  "name": "PlaneForge",
+  "short_name": "PlaneForge",
+  "description": "Engineering LMS and consultation platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#061b3b",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
