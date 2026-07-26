@@ -7,6 +7,10 @@ export const env = {
   mongoUri: process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/planeforge',
   jwtSecret: process.env.JWT_SECRET || 'replace-this-development-secret',
   clientUrl: process.env.CLIENT_URL || 'http://localhost:7310',
+  corsAllowedOrigins: (process.env.CORS_ALLOWED_ORIGINS || '*')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
   resendApiKey: process.env.RESEND_API_KEY,
   resendFrom: process.env.RESEND_FROM || 'PlaneForge <hello@planeforge.local>',
   cloudinary: {

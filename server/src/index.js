@@ -17,12 +17,18 @@ import { errorHandler, notFound } from './middleware/errorHandler.js';
 
 const app = express();
 const localDevOrigin = /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/;
+const allowAllCorsOrigins = env.corsAllowedOrigins.includes('*');
+const allowedCorsOrigins = new Set([env.clientUrl, ...env.corsAllowedOrigins]);
 
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' }
+  })
+);
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || origin === env.clientUrl) {
+      if (!origin || allowAllCorsOrigins || allowedCorsOrigins.has(origin)) {
         callback(null, true);
         return;
       }
@@ -34,7 +40,8 @@ app.use(
 
       callback(new Error('Not allowed by CORS'));
     },
-    credentials: true
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
   })
 );
 app.use(cookieParser());
