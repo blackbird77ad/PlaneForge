@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom';
-import { Award, BookOpen, Clock, Mail, Phone, ShieldCheck } from 'lucide-react';
+import { Award, BookOpen, Clock, Linkedin, Mail, Phone, ShieldCheck } from 'lucide-react';
 import { NewsletterForm } from './NewsletterForm.jsx';
 import logo from '../assets/planeforge-logo.png';
 
-const phone = '+2015406178';
+const linkedInUrl = 'https://www.linkedin.com/company/planeforge?trk=blended-typeahead';
+const phone = '+2015406176';
 const email = 'planeforge1@gmail.com';
 
 export const Footer = () => (
@@ -44,6 +45,9 @@ export const Footer = () => (
           </a>
           <a href={`mailto:${email}`}>
             <Mail size={18} /> {email}
+          </a>
+          <a href={linkedInUrl} target="_blank" rel="noreferrer">
+            <Linkedin size={18} /> LinkedIn
           </a>
         </div>
       </section>

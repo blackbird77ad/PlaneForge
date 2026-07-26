@@ -16,7 +16,7 @@ export const Contact = () => (
       <article>
         <Phone size={22} />
         <h2>Phone</h2>
-        <p>+2015406178</p>
+        <p>+2015406176</p>
       </article>
       <article>
         <MapPin size={22} />
