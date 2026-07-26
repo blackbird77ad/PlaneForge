@@ -12,9 +12,16 @@ const labels = {
   '/search': 'Search'
 };
 
+const pageTitle = (pathname) => {
+  if (pathname.startsWith('/courses')) return 'PLC Courses';
+  if (pathname.startsWith('/checkout')) return 'Checkout';
+  if (pathname.startsWith('/dashboard')) return 'Dashboard';
+  return labels[pathname] || 'This page';
+};
+
 export const UnderDevelopment = () => {
   const { pathname } = useLocation();
-  const title = labels[pathname] || 'This page';
+  const title = pageTitle(pathname);
 
   return (
     <main className="under-development-page">
@@ -23,10 +30,10 @@ export const UnderDevelopment = () => {
           <Hammer size={34} />
         </span>
         <p className="eyebrow">Coming soon</p>
-        <h1>{title} is being forged.</h1>
+        <h1>{title} is warming up behind the scenes.</h1>
         <p>
-          This part of PlaneForge Academy is under development while we shape the full learning
-          and consultation experience. The homepage is ready now, and this section is next in line.
+          The homepage is live for now while we carefully shape the full PlaneForge Academy
+          experience. This section is still being prepared, polished, and tested before it opens.
         </p>
         <div className="under-dev-actions">
           <Link className="button primary" to="/">
