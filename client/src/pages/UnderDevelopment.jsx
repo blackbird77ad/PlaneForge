@@ -3,7 +3,7 @@ import { ArrowRight, Hammer, Mail, Phone } from 'lucide-react';
 
 const labels = {
   '/courses': 'PLC Courses',
-  '/consultations': 'CEO Consulting',
+  '/consultations': 'PLC Consulting',
   '/about': 'About Us',
   '/blog': 'Blog',
   '/contact': 'Contact',

@@ -11,7 +11,7 @@ export const Consultations = () => {
   const [consultants, setConsultants] = useState([]);
   const [selected, setSelected] = useState(null);
   const [form, setForm] = useState({
-    service: 'CEO PLC project advisory',
+    service: 'PlaneForge PLC project consulting',
     category: 'PLC & Industrial Automation',
     scheduledAt: '',
     provider: 'stripe',
@@ -46,9 +46,9 @@ export const Consultations = () => {
   return (
     <main className="section page">
       <div className="page-heading">
-        <p className="eyebrow">CEO Consulting</p>
-        <h1>Bring PLC project and research questions to the PlaneForge CEO</h1>
-        <p>Companies can request advisory time for PLC projects, automation research, feasibility, troubleshooting, and implementation planning.</p>
+        <p className="eyebrow">PLC Consulting</p>
+        <h1>Bring PLC projects, products, and research questions to PlaneForge</h1>
+        <p>Companies can consult with PlaneForge for PLC projects, automation products, research, feasibility, troubleshooting, builds, and implementation planning.</p>
       </div>
 
       <section className="consultation-layout">
@@ -59,7 +59,7 @@ export const Consultations = () => {
         </div>
 
         <form className="booking-panel" onSubmit={submit}>
-          <p className="eyebrow">Selected advisor</p>
+          <p className="eyebrow">Selected support</p>
           {selected && (
             <div className="selected-consultant">
               <img src={selected.avatar} alt="" />
@@ -74,11 +74,11 @@ export const Consultations = () => {
           <label>
             Service
             <select value={form.service} onChange={(event) => update('service', event.target.value)}>
-              <option>CEO PLC project advisory</option>
+              <option>PlaneForge PLC project consulting</option>
               <option>Automation research and feasibility review</option>
               <option>Controls architecture review</option>
               <option>PLC troubleshooting strategy</option>
-              <option>Technical proposal and project scoping</option>
+              <option>PLC product build and project scoping</option>
             </select>
           </label>
 
@@ -119,7 +119,7 @@ export const Consultations = () => {
 
           <button className="button primary full" type="submit">
             <CalendarDays size={18} />
-            Request CEO Consulting
+            Consult PlaneForge
           </button>
           <p className="secure-note">
             <CreditCard size={16} /> Payment is verified before the consulting request is confirmed.

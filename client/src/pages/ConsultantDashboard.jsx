@@ -5,7 +5,7 @@ import { MetricCard } from '../components/MetricCard.jsx';
 const sessions = [
   {
     student: 'Maya Okafor',
-    service: 'PLC project advisory',
+    service: 'PLC project consulting',
     time: 'Tuesday, 10:00',
     amount: 250,
     status: 'confirmed'
@@ -20,7 +20,7 @@ const sessions = [
 ];
 
 export const ConsultantDashboard = () => (
-  <DashboardShell title="CEO consulting workspace" subtitle="Manage company requests, availability, earnings, and PLC advisory preparation.">
+  <DashboardShell title="PLC consulting workspace" subtitle="Manage company requests, availability, earnings, and PLC project preparation.">
     <div className="metric-grid">
       <MetricCard label="Upcoming requests" value={sessions.length} detail="Next 7 days" />
       <MetricCard label="Confirmed revenue" value="$500" detail="Mock local payments" />

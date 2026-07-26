@@ -23,7 +23,7 @@ const featuredCourses = courses.slice(0, 4);
 
 const trustItems = [
   { label: 'PLC-First Training', icon: BookOpen },
-  { label: 'CEO Advisory', icon: ShieldCheck },
+  { label: 'PLC Consulting', icon: ShieldCheck },
   { label: 'Flexible Learning', icon: Clock },
   { label: 'Project Certificates', icon: Award }
 ];
@@ -50,8 +50,8 @@ const missionFeatures = [
     icon: FileText
   },
   {
-    title: 'CEO Consulting',
-    text: 'Companies can reach the PlaneForge CEO for PLC project scoping, research, and technical advisory work.',
+    title: 'PlaneForge Consulting',
+    text: 'Companies consult with PlaneForge for PLC projects, products, research, scoping, builds, and implementation support.',
     icon: CalendarDays
   },
   {
@@ -63,8 +63,8 @@ const missionFeatures = [
 
 const consultationCards = [
   {
-    title: 'Company Project Advisory',
-    text: 'Bring PLC project questions, plant constraints, and implementation decisions to the CEO.',
+    title: 'PLC Project Builds',
+    text: 'Bring PLC systems, product ideas, plant constraints, and implementation decisions to PlaneForge.',
     icon: BriefcaseBusiness
   },
   {
@@ -73,8 +73,8 @@ const consultationCards = [
     icon: ShieldCheck
   },
   {
-    title: 'PLC Implementation Review',
-    text: 'Review logic, I/O, commissioning plans, troubleshooting strategy, and delivery risks.',
+    title: 'Implementation & Troubleshooting',
+    text: 'Get support for logic, I/O, commissioning plans, troubleshooting, builds, and delivery risks.',
     icon: Award
   }
 ];
@@ -94,14 +94,14 @@ export const Home = () => {
         <div className="hero-circuit hero-circuit-right" aria-hidden="true" />
         <div className="section-inner hero-grid">
           <div className="hero-copy">
-            <p className="hero-badge">PLC Training. CEO-Led Consulting.</p>
+            <p className="hero-badge">PLC Training. Consulting. Builds.</p>
             <h1>
               Master PLC systems for real <span>automation work.</span>
             </h1>
             <p>
-              PlaneForge Academy focuses on Programmable Logic Controller (PLC) training and
-              CEO-led consulting for companies that need project scoping, automation research,
-              troubleshooting, and implementation support.
+              PlaneForge Academy focuses on Programmable Logic Controller (PLC) training, while
+              PlaneForge consults with companies and builds PLC projects, automation products,
+              control systems, research plans, and implementation solutions.
             </p>
             <div className="hero-actions">
               <Link className="button primary" to="/courses">
@@ -109,7 +109,7 @@ export const Home = () => {
                 <ArrowRight size={18} />
               </Link>
               <Link className="button outline-light" to="/consultations">
-                Request CEO Consulting
+                Consult PlaneForge
                 <CalendarDays size={18} />
               </Link>
             </div>
@@ -132,7 +132,7 @@ export const Home = () => {
             </div>
             <div className="hero-mini-card hero-mini-card-bottom">
               <Award size={19} />
-              CEO Advisory
+              PLC Builds
             </div>
           </div>
         </div>
@@ -189,8 +189,8 @@ export const Home = () => {
             <p className="eyebrow">Why Choose PlaneForge</p>
             <h2>Focused on PLC learning and company consulting</h2>
             <p>
-              We provide practical PLC education and CEO-led consulting for companies that need
-              help with automation projects, research, feasibility, and technical decisions.
+              We provide practical PLC education, consulting, and build support for companies
+              working on automation projects, products, research, feasibility, and technical decisions.
             </p>
             <Link className="button primary" to="/about">
               Learn More About Us
@@ -212,14 +212,14 @@ export const Home = () => {
       <section className="consultation-band">
         <div className="section-inner consultation-grid">
           <div>
-            <p className="eyebrow">CEO Consulting</p>
-            <h2>Companies can bring PLC projects to the PlaneForge CEO</h2>
+            <p className="eyebrow">PLC Consulting & Builds</p>
+            <h2>Companies can consult with PlaneForge on PLC projects and products</h2>
             <p>
-              Request advisory support for PLC project planning, controls research, architecture
-              review, troubleshooting strategy, and implementation decisions.
+              PlaneForge is well versed in PLC project planning, controls research, architecture,
+              product builds, troubleshooting, commissioning, and implementation decisions.
             </p>
             <Link className="button primary" to="/consultations">
-              Request Consulting
+              Consult PlaneForge
               <ArrowRight size={18} />
             </Link>
           </div>

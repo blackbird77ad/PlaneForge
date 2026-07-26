@@ -21,7 +21,7 @@ export const Contact = () => (
       <article>
         <MapPin size={22} />
         <h2>Location</h2>
-        <p>Online PLC education and CEO-led automation consulting support.</p>
+        <p>Online PLC education, consulting, product build, and automation support.</p>
       </article>
     </section>
     <form className="contact-form">

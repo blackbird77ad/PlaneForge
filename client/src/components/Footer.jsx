@@ -18,8 +18,8 @@ export const Footer = () => (
       </article>
       <article>
         <ShieldCheck size={38} />
-        <strong>CEO Advisory</strong>
-        <span>Companies can reach the CEO for project, research, and PLC consulting.</span>
+        <strong>PLC Consulting</strong>
+        <span>Companies consult with PlaneForge for PLC projects, products, builds, and research.</span>
       </article>
       <article>
         <Clock size={38} />
@@ -37,8 +37,8 @@ export const Footer = () => (
       <section>
         <img className="footer-logo" src={logo} alt="PlaneForge Academy" />
         <p>
-          Helping learners build PLC skills and helping companies reach the PlaneForge CEO for
-          automation projects, research, feasibility, and technical consulting.
+          Helping learners build PLC skills and helping companies consult with PlaneForge on
+          automation projects, PLC products, research, feasibility, builds, and technical support.
         </p>
         <div className="footer-contact">
           <a href={`https://wa.me/${phone.replace('+', '')}`}>
@@ -60,7 +60,7 @@ export const Footer = () => (
         <h3>Quick links</h3>
         <Link to="/">Home</Link>
         <Link to="/courses">PLC Courses</Link>
-        <Link to="/consultations">CEO Consulting</Link>
+        <Link to="/consultations">PLC Consulting</Link>
         <Link to="/about">About</Link>
         <Link to="/blog">Blog</Link>
         <Link to="/contact">Contact Us</Link>

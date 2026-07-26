@@ -18,7 +18,7 @@ export const StudentDashboard = () => {
         <MetricCard label="Active courses" value={activeCourses.length} detail="Protected lessons unlocked" />
         <MetricCard label="Average progress" value="42%" detail="Across enrolled courses" />
         <MetricCard label="Certificates" value="1" detail="Available after completion" />
-        <MetricCard label="Consultations" value="1" detail="Upcoming CEO advisory" />
+        <MetricCard label="Consultations" value="1" detail="Upcoming PlaneForge consulting" />
       </div>
 
       <section className="dashboard-section">

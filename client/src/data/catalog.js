@@ -1,13 +1,13 @@
 export const heroImage =
   'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1800&q=85';
 
-const ceoInstructor = {
-  name: 'PlaneForge CEO',
-  title: 'CEO & Principal PLC Consultant',
+const planeforgeInstructor = {
+  name: 'PlaneForge',
+  title: 'PLC Projects & Products Team',
   avatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=400&q=80',
-  specialty: 'PLC systems, industrial automation, and company project advisory',
-  bio: 'The PlaneForge CEO works directly with companies on PLC projects, automation research, technical scoping, and implementation decisions.',
-  qualifications: ['PLC Programming Lead', 'Industrial Automation Advisor', 'Control Systems Project Consultant'],
+  specialty: 'PLC systems, industrial automation, company projects, and product builds',
+  bio: 'PlaneForge works directly with companies on PLC projects, automation products, controls research, technical scoping, builds, troubleshooting, and implementation decisions.',
+  qualifications: ['PLC Programming Lead', 'Industrial Automation Advisor', 'Control Systems Project Build Team'],
   experienceYears: 14
 };
 
@@ -25,8 +25,8 @@ export const courses = [
     category: 'PLC Programming',
     discipline: 'PLC & Industrial Automation',
     difficulty: 'Beginner',
-    instructorName: ceoInstructor.name,
-    instructor: ceoInstructor,
+    instructorName: planeforgeInstructor.name,
+    instructor: planeforgeInstructor,
     language: 'English',
     price: 149,
     currency: 'USD',
@@ -92,8 +92,8 @@ export const courses = [
     category: 'Troubleshooting',
     discipline: 'PLC & Industrial Automation',
     difficulty: 'Intermediate',
-    instructorName: ceoInstructor.name,
-    instructor: ceoInstructor,
+    instructorName: planeforgeInstructor.name,
+    instructor: planeforgeInstructor,
     language: 'English',
     price: 139,
     currency: 'USD',
@@ -137,8 +137,8 @@ export const courses = [
     category: 'HMI & SCADA',
     discipline: 'PLC & Industrial Automation',
     difficulty: 'Intermediate',
-    instructorName: ceoInstructor.name,
-    instructor: ceoInstructor,
+    instructorName: planeforgeInstructor.name,
+    instructor: planeforgeInstructor,
     language: 'English',
     price: 129,
     currency: 'USD',
@@ -174,8 +174,8 @@ export const courses = [
     category: 'Field Devices',
     discipline: 'Industrial Controls',
     difficulty: 'Intermediate',
-    instructorName: ceoInstructor.name,
-    instructor: ceoInstructor,
+    instructorName: planeforgeInstructor.name,
+    instructor: planeforgeInstructor,
     language: 'English',
     price: 119,
     currency: 'USD',
@@ -211,8 +211,8 @@ export const courses = [
     category: 'Project Consulting',
     discipline: 'PLC & Industrial Automation',
     difficulty: 'Professional',
-    instructorName: ceoInstructor.name,
-    instructor: ceoInstructor,
+    instructorName: planeforgeInstructor.name,
+    instructor: planeforgeInstructor,
     language: 'English',
     price: 159,
     currency: 'USD',
@@ -248,8 +248,8 @@ export const courses = [
     category: 'QA & Documentation',
     discipline: 'Industrial Controls',
     difficulty: 'Advanced',
-    instructorName: ceoInstructor.name,
-    instructor: ceoInstructor,
+    instructorName: planeforgeInstructor.name,
+    instructor: planeforgeInstructor,
     language: 'English',
     price: 109,
     currency: 'USD',
@@ -276,15 +276,15 @@ export const courses = [
 
 export const consultants = [
   {
-    id: 'consultant-ceo',
-    _id: 'consultant-ceo',
-    name: 'PlaneForge CEO',
-    title: 'CEO & Principal PLC Consultant',
-    specialty: 'Company PLC projects, automation research, and technical advisory',
-    avatar: ceoInstructor.avatar,
-    bio: 'Companies can reach out to the PlaneForge CEO for PLC project scoping, automation research, controls architecture reviews, troubleshooting strategy, and implementation guidance.',
-    qualifications: ceoInstructor.qualifications,
-    experienceYears: ceoInstructor.experienceYears,
+    id: 'consultant-planeforge',
+    _id: 'consultant-planeforge',
+    name: 'PlaneForge',
+    title: 'PLC Projects & Products Consulting',
+    specialty: 'Company PLC projects, product builds, automation research, and technical support',
+    avatar: planeforgeInstructor.avatar,
+    bio: 'Companies can consult with PlaneForge for PLC project scoping, automation products, controls research, architecture reviews, builds, troubleshooting, commissioning, and implementation guidance.',
+    qualifications: planeforgeInstructor.qualifications,
+    experienceYears: planeforgeInstructor.experienceYears,
     consultationFee: 250,
     languages: ['English'],
     availability: [
@@ -309,7 +309,7 @@ export const articles = [
     image: 'https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=900&q=80',
     category: 'Consulting',
     readingTime: '4 min',
-    excerpt: 'Recognize the moments when CEO-led PLC advisory can save research time, rework, cost, and project risk.'
+    excerpt: 'Recognize the moments when PlaneForge PLC consulting and build support can save research time, rework, cost, and project risk.'
   },
   {
     id: 'article-certificates',
@@ -332,7 +332,7 @@ export const testimonials = [
     name: 'Priya Nair',
     occupation: 'Operations Director',
     photo: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=80',
-    review: 'The CEO consultation helped us turn a vague automation idea into a scoped PLC project.'
+    review: 'The PlaneForge consultation helped us turn a vague automation idea into a scoped PLC project and product path.'
   },
   {
     name: 'Luis Ortega',
@@ -344,7 +344,7 @@ export const testimonials = [
 
 export const benefits = [
   'PLC-focused curriculum',
-  'CEO-led consulting',
+  'PLC consulting and builds',
   'Practical ladder logic',
   'Industrial troubleshooting',
   'Professional certificates',
@@ -372,10 +372,10 @@ export const demoUsers = {
   },
   consultant: {
     id: 'demo-consultant',
-    name: 'PlaneForge CEO',
+    name: 'PlaneForge',
     email: 'consultant@planeforge.test',
     role: 'consultant',
-    avatar: ceoInstructor.avatar
+    avatar: planeforgeInstructor.avatar
   },
   partner: {
     id: 'demo-partner',

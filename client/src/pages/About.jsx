@@ -4,7 +4,7 @@ export const About = () => (
   <main className="section page">
     <div className="page-heading">
       <p className="eyebrow">About Us</p>
-      <h1>PlaneForge connects PLC learning with CEO-led company consulting</h1>
+      <h1>PlaneForge connects PLC learning with company consulting and builds</h1>
       <p>
         The platform is designed for PLC learners, technicians, working engineers, companies, partners,
         and administrators who need practical automation training and project support.
@@ -18,8 +18,8 @@ export const About = () => (
       </article>
       <article>
         <CalendarDays size={24} />
-        <h2>CEO consulting</h2>
-        <p>Companies can request the CEO for PLC projects, automation research, feasibility, and technical advisory work.</p>
+        <h2>PLC consulting and builds</h2>
+        <p>Companies can consult with PlaneForge for PLC projects, products, automation research, feasibility, builds, and technical support.</p>
       </article>
       <article>
         <ShieldCheck size={24} />

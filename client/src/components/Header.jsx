@@ -13,8 +13,8 @@ const navItems = [
   },
   {
     to: '/consultations',
-    label: 'CEO Consulting',
-    dropdown: ['Company Projects', 'Research Support', 'PLC Reviews']
+    label: 'PLC Consulting',
+    dropdown: ['Company Projects', 'Product Builds', 'Research Support']
   },
   { to: '/about', label: 'About Us' },
   { to: '/blog', label: 'Blog' },

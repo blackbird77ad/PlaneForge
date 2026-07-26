@@ -12,7 +12,7 @@ import { User } from '../models/User.js';
 await connectDb();
 
 const passwordHash = await User.hashPassword('Password123!');
-const ceoAvatar = 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=400&q=80';
+const planeforgeAvatar = 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=400&q=80';
 
 await Promise.all([
   BlogPost.deleteMany({}),
@@ -40,16 +40,16 @@ const users = await User.insertMany([
     }
   },
   {
-    name: 'PlaneForge CEO',
+    name: 'PlaneForge',
     email: 'consultant@planeforge.test',
     passwordHash,
     role: 'consultant',
-    avatar: ceoAvatar,
-    title: 'CEO & Principal PLC Consultant',
-    specialty: 'Company PLC projects, automation research, and technical advisory',
+    avatar: planeforgeAvatar,
+    title: 'PLC Projects & Products Consulting',
+    specialty: 'Company PLC projects, product builds, automation research, and technical support',
     bio:
-      'The PlaneForge CEO works directly with companies that reach out for PLC project scoping, automation research, controls architecture reviews, troubleshooting strategy, and implementation guidance.',
-    qualifications: ['PLC Programming Lead', 'Industrial Automation Advisor', 'Control Systems Project Consultant'],
+      'PlaneForge works directly with companies that reach out for PLC project scoping, automation products, controls research, architecture reviews, builds, troubleshooting strategy, commissioning, and implementation guidance.',
+    qualifications: ['PLC Programming Lead', 'Industrial Automation Advisor', 'Control Systems Project Build Team'],
     experienceYears: 14,
     consultationFee: 250,
     availability: [
@@ -76,7 +76,7 @@ const users = await User.insertMany([
   }
 ]);
 
-const [student, ceoConsultant, , admin] = users;
+const [student, planeforgeConsultant, , admin] = users;
 
 const courses = await Course.create([
   {
@@ -90,8 +90,8 @@ const courses = await Course.create([
     category: 'PLC Programming',
     discipline: 'PLC & Industrial Automation',
     difficulty: 'Beginner',
-    instructor: ceoConsultant._id,
-    instructorName: ceoConsultant.name,
+    instructor: planeforgeConsultant._id,
+    instructorName: planeforgeConsultant.name,
     language: 'English',
     price: 149,
     duration: '9h 10m',
@@ -163,8 +163,8 @@ const courses = await Course.create([
     category: 'Troubleshooting',
     discipline: 'PLC & Industrial Automation',
     difficulty: 'Intermediate',
-    instructor: ceoConsultant._id,
-    instructorName: ceoConsultant.name,
+    instructor: planeforgeConsultant._id,
+    instructorName: planeforgeConsultant.name,
     language: 'English',
     price: 139,
     duration: '6h 40m',
@@ -222,8 +222,8 @@ const courses = await Course.create([
     category: 'HMI & SCADA',
     discipline: 'PLC & Industrial Automation',
     difficulty: 'Intermediate',
-    instructor: ceoConsultant._id,
-    instructorName: ceoConsultant.name,
+    instructor: planeforgeConsultant._id,
+    instructorName: planeforgeConsultant.name,
     language: 'English',
     price: 129,
     duration: '5h 55m',
@@ -267,8 +267,8 @@ const courses = await Course.create([
     category: 'Field Devices',
     discipline: 'Industrial Controls',
     difficulty: 'Intermediate',
-    instructor: ceoConsultant._id,
-    instructorName: ceoConsultant.name,
+    instructor: planeforgeConsultant._id,
+    instructorName: planeforgeConsultant.name,
     language: 'English',
     price: 119,
     duration: '6h 15m',
@@ -301,8 +301,8 @@ const courses = await Course.create([
     category: 'Project Consulting',
     discipline: 'PLC & Industrial Automation',
     difficulty: 'Professional',
-    instructor: ceoConsultant._id,
-    instructorName: ceoConsultant.name,
+    instructor: planeforgeConsultant._id,
+    instructorName: planeforgeConsultant.name,
     language: 'English',
     price: 159,
     duration: '5h 25m',
@@ -335,8 +335,8 @@ const courses = await Course.create([
     category: 'QA & Documentation',
     discipline: 'Industrial Controls',
     difficulty: 'Advanced',
-    instructor: ceoConsultant._id,
-    instructorName: ceoConsultant.name,
+    instructor: planeforgeConsultant._id,
+    instructorName: planeforgeConsultant.name,
     language: 'English',
     price: 109,
     duration: '4h 50m',
@@ -387,12 +387,12 @@ await BlogPost.create([
   },
   {
     title: 'When Companies Should Book PLC Consulting',
-    excerpt: 'Recognize the moments when CEO-led PLC advisory can save research time, rework, cost, and project risk.',
-    body: 'Consulting is useful before PLC architecture decisions, automation research, proposal submission, procurement, commissioning, and production downtime reviews.',
+    excerpt: 'Recognize the moments when PlaneForge PLC consulting and build support can save research time, rework, cost, and project risk.',
+    body: 'Consulting is useful before PLC architecture decisions, automation product builds, controls research, proposal submission, procurement, commissioning, and production downtime reviews.',
     image: 'https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&w=900&q=80',
     category: 'Consulting',
     readingTime: '4 min',
-    author: ceoConsultant._id
+    author: planeforgeConsultant._id
   },
   {
     title: 'PLC Certificates That Mean Something',
@@ -417,12 +417,12 @@ await SystemSetting.create({
 
 await Consultation.create({
   student: student._id,
-  consultant: ceoConsultant._id,
-  service: 'CEO PLC project advisory',
+  consultant: planeforgeConsultant._id,
+  service: 'PlaneForge PLC project consulting',
   category: 'PLC & Industrial Automation',
   scheduledAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 5),
   durationMinutes: 60,
-  amount: ceoConsultant.consultationFee,
+  amount: planeforgeConsultant.consultationFee,
   provider: 'mock',
   paymentRef: `seed_${Date.now()}`,
   status: 'confirmed',
