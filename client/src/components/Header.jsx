@@ -8,13 +8,13 @@ const navItems = [
   { to: '/', label: 'Home' },
   {
     to: '/courses',
-    label: 'PLC Courses',
-    dropdown: ['All PLC Courses', 'PLC Fundamentals', 'Troubleshooting', 'HMI & SCADA']
+    label: 'PCB Courses',
+    dropdown: ['All PCB Courses', 'Beginner Builds', 'Dev Boards & Programmers', 'FPGA Design']
   },
   {
     to: '/consultations',
-    label: 'PLC Consulting',
-    dropdown: ['Company Projects', 'Product Builds', 'Research Support']
+    label: 'PlaneForge Consulting',
+    dropdown: ['PCB Project Builds', 'Research & Feasibility', 'Implementation Support']
   },
   { to: '/about', label: 'About Us' },
   { to: '/blog', label: 'Blog' },

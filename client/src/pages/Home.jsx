@@ -6,84 +6,63 @@ import {
   BriefcaseBusiness,
   CalendarDays,
   Clock,
-  CreditCard,
   FileText,
-  ShieldCheck,
-  Star,
-  UserRound,
-  Users
+  ShieldCheck
 } from 'lucide-react';
-import { articles, courses, heroImage, testimonials } from '../data/catalog.js';
+import { courses, heroImage } from '../data/catalog.js';
 import { NewsletterForm } from '../components/NewsletterForm.jsx';
 
 const formatMoney = (value, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(value);
 
-const featuredCourses = courses.slice(0, 4);
+const featuredCourses = courses.slice(0, 6);
 
 const trustItems = [
-  { label: 'PLC-First Training', icon: BookOpen },
-  { label: 'PLC Consulting', icon: ShieldCheck },
-  { label: 'Flexible Learning', icon: Clock },
-  { label: 'Project Certificates', icon: Award }
+  { label: 'Project-Based Training', icon: BookOpen },
+  { label: '51+ PCB Courses', icon: Award },
+  { label: 'Flexible Self-Paced Learning', icon: Clock },
+  { label: 'Project Certificates', icon: FileText }
 ];
 
 const missionFeatures = [
   {
-    title: 'PLC-Focused Courses',
-    text: 'Programmable Logic Controller lessons built around real control panels, I/O, ladder logic, and commissioning.',
+    title: 'PCB-Focused Courses',
+    text: 'Project-based lessons built around real schematics, layouts, footprints, and fabrication-ready Gerbers.',
     icon: BookOpen
   },
   {
-    title: 'Real Controls Practice',
-    text: 'Practice the workflows technicians and engineers use to wire, program, test, and troubleshoot PLC systems.',
-    icon: UserRound
+    title: 'Real Board-Building Practice',
+    text: 'Practice the actual workflows PCB designers use: schematic capture, layout, routing, DFM checks, and bring-up.',
+    icon: ShieldCheck
   },
   {
     title: 'Flexible Technical Learning',
-    text: 'Study PLC concepts at your own pace with practical modules and lifetime access to materials.',
+    text: 'Study PCB design concepts at your own pace with practical modules and lifetime access to course materials.',
     icon: Clock
   },
   {
     title: 'Project-Ready Certificates',
-    text: 'Earn certificates that point to hands-on PLC skills and practical automation outcomes.',
+    text: 'Earn certificates tied to real, completed PCB builds - not just video-watching.',
     icon: FileText
-  },
-  {
-    title: 'PlaneForge Consulting',
-    text: 'Companies consult with PlaneForge for PLC projects, products, research, scoping, builds, and implementation support.',
-    icon: CalendarDays
-  },
-  {
-    title: 'Company Research Support',
-    text: 'Get help clarifying automation ideas, implementation risks, and the technical path before teams commit budget.',
-    icon: Users
   }
 ];
 
 const consultationCards = [
   {
-    title: 'PLC Project Builds',
-    text: 'Bring PLC systems, product ideas, plant constraints, and implementation decisions to PlaneForge.',
+    title: 'PCB Project Builds',
+    text: 'Bring PCB systems, product ideas, hardware constraints, and implementation decisions to PlaneForge.',
     icon: BriefcaseBusiness
   },
   {
     title: 'Research & Feasibility',
-    text: 'Pressure-test automation ideas, equipment choices, control architecture, and project assumptions.',
+    text: 'Pressure-test hardware ideas, component choices, board architecture, and project assumptions.',
     icon: ShieldCheck
   },
   {
     title: 'Implementation & Troubleshooting',
-    text: 'Get support for logic, I/O, commissioning plans, troubleshooting, builds, and delivery risks.',
+    text: 'Get support for schematic/layout review, DFM checks, bring-up, troubleshooting, and delivery risk.',
     icon: Award
   }
-];
-
-const stats = [
-  ['3,000+', 'PLC Learners'],
-  ['42+', 'PLC Lessons & Labs'],
-  ['25+', 'Company Consultations'],
-  ['1,200+', 'Certificates Issued']
 ];
 
 export const Home = () => {
@@ -94,18 +73,20 @@ export const Home = () => {
         <div className="hero-circuit hero-circuit-right" aria-hidden="true" />
         <div className="section-inner hero-grid">
           <div className="hero-copy">
-            <p className="hero-badge">PLC Training. Consulting. Builds.</p>
+            <p className="hero-badge">PlaneForge Academy</p>
             <h1>
-              Master PLC systems for real <span>automation work.</span>
+              PCB Design Training. Real Boards. <span>Real Skills.</span>
             </h1>
             <p>
-              PlaneForge Academy focuses on Programmable Logic Controller (PLC) training, while
-              PlaneForge consults with companies and builds PLC projects, automation products,
-              control systems, research plans, and implementation solutions.
+              Master PCB design through hands-on, project-based courses. PlaneForge Academy
+              teaches PCB (printed circuit board) design and hardware engineering through
+              hands-on, project-based courses. Students learn by building real boards, from dev
+              boards and sensor breakouts to flight controllers and FPGA boards, rather than
+              watching lectures alone.
             </p>
             <div className="hero-actions">
               <Link className="button primary" to="/courses">
-                Explore PLC Courses
+                Explore PCB Courses
                 <ArrowRight size={18} />
               </Link>
               <Link className="button outline-light" to="/consultations">
@@ -125,14 +106,14 @@ export const Home = () => {
 
           <div className="hero-visual">
             <div className="hero-glow" />
-            <img src={heroImage} alt="Engineer working on industrial automation and PLC controls" />
+            <img src={heroImage} alt="Printed circuit board design and hardware engineering work" />
             <div className="hero-mini-card hero-mini-card-top">
-              <CreditCard size={19} />
-              PLC Learning
+              <BookOpen size={19} />
+              PCB Learning
             </div>
             <div className="hero-mini-card hero-mini-card-bottom">
               <Award size={19} />
-              PLC Builds
+              Real Board Builds
             </div>
           </div>
         </div>
@@ -142,11 +123,11 @@ export const Home = () => {
         <div className="section-inner">
           <div className="section-title-row">
             <div>
-              <p className="eyebrow">PLC Courses</p>
-              <h2>Build practical Programmable Logic Controller skills</h2>
+              <p className="eyebrow">PCB Courses</p>
+              <h2>Build practical PCB design skills, one real board at a time.</h2>
             </div>
             <Link className="button ghost small" to="/courses">
-              View PLC Courses
+              View All PCB Courses
               <ArrowRight size={16} />
             </Link>
           </div>
@@ -156,22 +137,10 @@ export const Home = () => {
               <article className="home-course-card" key={course.slug}>
                 <div className="course-thumb">
                   <img src={course.thumbnail} alt="" />
-                  <span>{course.discipline.split(' ')[0]}</span>
+                  <span>{course.category}</span>
                 </div>
                 <div className="home-course-body">
                   <h3>{course.title}</h3>
-                  <div className="instructor-line">
-                    <img src={course.instructor?.avatar} alt="" />
-                    <span>{course.instructorName}</span>
-                  </div>
-                  <div className="course-card-meta">
-                    <span>
-                      <Star size={15} fill="currentColor" /> {course.rating}
-                    </span>
-                    <span>
-                      <Users size={15} /> {course.studentsEnrolled.toLocaleString()} Students
-                    </span>
-                  </div>
                   <div className="course-price-row">
                     <span>{course.difficulty}</span>
                     <strong>{formatMoney(course.price, course.currency)}</strong>
@@ -186,11 +155,11 @@ export const Home = () => {
       <section className="home-section mission-section">
         <div className="section-inner mission-grid">
           <div className="mission-copy">
-            <p className="eyebrow">Why Choose PlaneForge</p>
-            <h2>Focused on PLC learning and company consulting</h2>
+            <p className="eyebrow">Why Choose PlaneForge Academy</p>
+            <h2>Focused on hands-on PCB education and company consulting</h2>
             <p>
-              We provide practical PLC education, consulting, and build support for companies
-              working on automation projects, products, research, feasibility, and technical decisions.
+              We provide practical PCB education, consulting, and build support for companies
+              working on hardware projects, products, research, feasibility, and technical decisions.
             </p>
             <Link className="button primary" to="/about">
               Learn More About Us
@@ -212,11 +181,11 @@ export const Home = () => {
       <section className="consultation-band">
         <div className="section-inner consultation-grid">
           <div>
-            <p className="eyebrow">PLC Consulting & Builds</p>
-            <h2>Companies can consult with PlaneForge on PLC projects and products</h2>
+            <p className="eyebrow">PlaneForge Consulting</p>
+            <h2>Companies consult with PlaneForge for PCB projects, products, and builds</h2>
             <p>
-              PlaneForge is well versed in PLC project planning, controls research, architecture,
-              product builds, troubleshooting, commissioning, and implementation decisions.
+              PlaneForge is well versed in PCB project planning, hardware research, schematic and
+              layout architecture, product builds, troubleshooting, and implementation decisions.
             </p>
             <Link className="button primary" to="/consultations">
               Consult PlaneForge
@@ -235,95 +204,14 @@ export const Home = () => {
         </div>
       </section>
 
-      <section className="stats-strip">
-        <div className="section-inner stats-grid">
-          {stats.map(([value, label], index) => (
-            <article key={label}>
-              {index === 0 && <Users size={34} />}
-              {index === 1 && <BookOpen size={34} />}
-              {index === 2 && <UserRound size={34} />}
-              {index === 3 && <FileText size={34} />}
-              <strong>{value}</strong>
-              <span>{label}</span>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="home-section testimonials-section">
-        <div className="section-inner">
-          <div className="section-title-row">
-            <div>
-              <p className="eyebrow">PLC Outcomes</p>
-              <h2>What PLC learners and companies are saying</h2>
-            </div>
-            <Link className="button ghost small" to="/testimonials">
-              View All Testimonials
-              <ArrowRight size={16} />
-            </Link>
-          </div>
-
-          <div className="home-testimonial-grid">
-            {testimonials.map((testimonial) => (
-              <article key={testimonial.name}>
-                <span className="quote-mark">"</span>
-                <p>{testimonial.review}</p>
-                <div>
-                  <img src={testimonial.photo} alt="" />
-                  <span>
-                    <strong>{testimonial.name}</strong>
-                    <small>{testimonial.occupation}</small>
-                  </span>
-                  <span className="stars">*****</span>
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="home-section article-section">
-        <div className="section-inner">
-          <div className="section-title-row">
-            <div>
-              <p className="eyebrow">From Our Blog</p>
-              <h2>Latest PLC insights and consulting notes</h2>
-            </div>
-            <Link className="button ghost small" to="/blog">
-              View All Articles
-              <ArrowRight size={16} />
-            </Link>
-          </div>
-
-          <div className="home-article-grid">
-            {articles.concat(articles.slice(0, 1)).slice(0, 4).map((article, index) => (
-              <article key={`${article.id}-${index}`}>
-                <div className="article-thumb">
-                  <img src={article.image} alt="" />
-                  <span>{article.category}</span>
-                </div>
-                <div>
-                  <h3>{article.title}</h3>
-                  <p>
-                    May {15 - index * 4}, 2026
-                    <span>|</span>
-                    {article.readingTime} read
-                  </p>
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
       <section className="newsletter-cta">
         <div className="section-inner newsletter-grid">
           <div className="newsletter-icon">
             <FileText size={34} />
           </div>
           <div>
-            <h2>Stay Updated with PlaneForge</h2>
-            <p>Subscribe to get PLC course updates, automation notes, consulting insights, and exclusive offers.</p>
+            <h2>Stay Updated with PlaneForge Academy</h2>
+            <p>Subscribe to get new course announcements, PCB design tips, and early access to new content.</p>
           </div>
           <NewsletterForm />
         </div>

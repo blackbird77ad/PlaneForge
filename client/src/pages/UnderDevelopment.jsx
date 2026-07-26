@@ -2,8 +2,8 @@ import { Link, useLocation } from 'react-router-dom';
 import { ArrowRight, Hammer, Mail, Phone } from 'lucide-react';
 
 const labels = {
-  '/courses': 'PLC Courses',
-  '/consultations': 'PLC Consulting',
+  '/courses': 'PCB Courses',
+  '/consultations': 'PlaneForge Consulting',
   '/about': 'About Us',
   '/blog': 'Blog',
   '/contact': 'Contact',
@@ -13,7 +13,7 @@ const labels = {
 };
 
 const pageTitle = (pathname) => {
-  if (pathname.startsWith('/courses')) return 'PLC Courses';
+  if (pathname.startsWith('/courses')) return 'PCB Courses';
   if (pathname.startsWith('/checkout')) return 'Checkout';
   if (pathname.startsWith('/dashboard')) return 'Dashboard';
   return labels[pathname] || 'This page';
