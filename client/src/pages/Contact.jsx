@@ -1,11 +1,13 @@
-import { Mail, MapPin, Phone } from 'lucide-react';
+import { Linkedin, Mail, MapPin } from 'lucide-react';
+
+const linkedInUrl = 'https://www.linkedin.com/company/planeforge?trk=blended-typeahead';
 
 export const Contact = () => (
   <main className="section page">
     <div className="page-heading">
       <p className="eyebrow">Contact</p>
       <h1>Talk with PlaneForge</h1>
-      <p>Send PLC course, company project, research, partnership, and consulting questions to the operations team.</p>
+      <p>Send PCB course, hardware project, research, partnership, and consulting questions to the operations team.</p>
     </div>
     <section className="contact-grid">
       <article>
@@ -14,14 +16,18 @@ export const Contact = () => (
         <p>planeforge1@gmail.com</p>
       </article>
       <article>
-        <Phone size={22} />
-        <h2>Phone</h2>
-        <p>+2015406176</p>
+        <Linkedin size={22} />
+        <h2>LinkedIn</h2>
+        <p>
+          <a href={linkedInUrl} target="_blank" rel="noreferrer">
+            PlaneForge
+          </a>
+        </p>
       </article>
       <article>
         <MapPin size={22} />
         <h2>Location</h2>
-        <p>Online PLC education, consulting, product build, and automation support.</p>
+        <p>Online PCB education, consulting, product build, and hardware support.</p>
       </article>
     </section>
     <form className="contact-form">

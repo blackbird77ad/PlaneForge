@@ -1,10 +1,9 @@
 import { Link } from 'react-router-dom';
-import { Award, BookOpen, Clock, Linkedin, Mail, Phone, ShieldCheck } from 'lucide-react';
+import { Award, BookOpen, Clock, Linkedin, Mail, ShieldCheck } from 'lucide-react';
 import { NewsletterForm } from './NewsletterForm.jsx';
 import logo from '../assets/planeforge-logo.png';
 
 const linkedInUrl = 'https://www.linkedin.com/company/planeforge?trk=blended-typeahead';
-const phone = '+2015406176';
 const email = 'planeforge1@gmail.com';
 
 export const Footer = () => (
@@ -40,9 +39,6 @@ export const Footer = () => (
           builds to flight controllers and FPGA boards.
         </p>
         <div className="footer-contact">
-          <a href={`tel:${phone}`}>
-            <Phone size={18} /> {phone}
-          </a>
           <a href={`mailto:${email}`}>
             <Mail size={18} /> {email}
           </a>
