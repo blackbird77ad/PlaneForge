@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Award, BarChart3, BookOpen, BriefcaseBusiness, CalendarDays, FileText, Settings, UserRound } from 'lucide-react';
+import { Award, BarChart3, BookOpen, BriefcaseBusiness, CalendarDays, FileText, Inbox, Settings, UserRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const navByRole = {
@@ -19,6 +19,7 @@ const navByRole = {
   ],
   admin: [
     { to: '/dashboard/admin', label: 'Overview', icon: BarChart3 },
+    { to: '/dashboard/admin#inquiries', label: 'Inquiries', icon: Inbox },
     { to: '/dashboard/admin#content', label: 'Content', icon: BookOpen },
     { to: '/dashboard/admin#payments', label: 'Payments', icon: FileText },
     { to: '/dashboard/admin#settings', label: 'Settings', icon: Settings }

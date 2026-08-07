@@ -7,16 +7,66 @@ const lessonSchema = new mongoose.Schema(
       type: String,
       required: true
     },
+    description: String,
     duration: {
       type: String,
       default: '8 min'
+    },
+    durationSeconds: {
+      type: Number,
+      default: 0
     },
     isPreview: {
       type: Boolean,
       default: false
     },
-    videoUrl: String,
-    resourceUrls: [String]
+    order: {
+      type: Number,
+      default: 0
+    },
+    stream: {
+      provider: {
+        type: String,
+        enum: ['cloudflare', 'mux', 'bunny', 'vimeo', 'external', 'unconfigured'],
+        default: 'cloudflare'
+      },
+      assetId: String,
+      playbackId: String,
+      uploadId: String,
+      status: {
+        type: String,
+        enum: ['not_uploaded', 'uploading', 'processing', 'ready', 'failed'],
+        default: 'not_uploaded'
+      },
+      signedPlaybackRequired: {
+        type: Boolean,
+        default: true
+      },
+      allowDownloads: {
+        type: Boolean,
+        default: false
+      }
+    },
+    resources: [
+      {
+        label: String,
+        url: String,
+        type: String,
+        downloadable: {
+          type: Boolean,
+          default: false
+        }
+      }
+    ],
+    videoUrl: {
+      type: String,
+      select: false
+    },
+    resourceUrls: {
+      type: [String],
+      select: false,
+      default: undefined
+    }
   },
   { timestamps: true }
 );
@@ -26,6 +76,11 @@ const moduleSchema = new mongoose.Schema(
     title: {
       type: String,
       required: true
+    },
+    description: String,
+    order: {
+      type: Number,
+      default: 0
     },
     lessons: [lessonSchema]
   },
@@ -81,7 +136,7 @@ const courseSchema = new mongoose.Schema(
     },
     difficulty: {
       type: String,
-      enum: ['Beginner', 'Intermediate', 'Advanced', 'Professional'],
+      enum: ['Beginner', 'Intermediate', 'Advanced', 'Professional', 'Capstone'],
       default: 'Beginner'
     },
     instructor: {
@@ -100,6 +155,29 @@ const courseSchema = new mongoose.Schema(
     currency: {
       type: String,
       default: 'USD'
+    },
+    purchaseType: {
+      type: String,
+      enum: ['one_time', 'subscription'],
+      default: 'one_time'
+    },
+    subscriptionDurationDays: {
+      type: Number,
+      default: null
+    },
+    paymentProviderOverrides: [
+      {
+        country: String,
+        provider: {
+          type: String,
+          enum: ['stripe', 'paystack']
+        }
+      }
+    ],
+    trailer: {
+      provider: String,
+      assetId: String,
+      playbackId: String
     },
     duration: {
       type: String,

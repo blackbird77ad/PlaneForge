@@ -8,18 +8,30 @@ const stripe = env.payments.stripeSecretKey
 
 const toCents = (amount) => Math.round(Number(amount) * 100);
 
-export const createPayment = async ({ provider, amount, currency = 'USD', description, metadata = {} }) => {
+export const createPayment = async ({
+  provider,
+  amount,
+  currency = 'USD',
+  description,
+  email,
+  metadata = {}
+}) => {
   const normalizedProvider = provider || 'mock';
 
-  if (env.payments.mock || normalizedProvider === 'mock') {
+  if (env.payments.mock) {
     return {
       provider: 'mock',
-      status: 'paid',
+      status: 'payment_initialized',
       paymentRef: `mock_${Date.now()}`,
       amount,
       currency,
-      checkoutUrl: null
+      checkoutUrl: null,
+      verificationRequired: true
     };
+  }
+
+  if (normalizedProvider === 'mock') {
+    throw new ApiError(400, 'Mock payments are disabled');
   }
 
   if (normalizedProvider === 'stripe') {
@@ -36,11 +48,12 @@ export const createPayment = async ({ provider, amount, currency = 'USD', descri
 
     return {
       provider: 'stripe',
-      status: paymentIntent.status === 'succeeded' ? 'paid' : 'pending',
+      status: 'payment_initialized',
       paymentRef: paymentIntent.id,
       amount,
       currency,
-      clientSecret: paymentIntent.client_secret
+      clientSecret: paymentIntent.client_secret,
+      verificationRequired: true
     };
   }
 
@@ -49,13 +62,39 @@ export const createPayment = async ({ provider, amount, currency = 'USD', descri
       throw new ApiError(400, 'Paystack is not configured');
     }
 
+    const response = await fetch('https://api.paystack.co/transaction/initialize', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.payments.paystackSecretKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        amount: toCents(amount),
+        currency,
+        email,
+        channels: ['card', 'mobile_money', 'bank', 'ussd', 'bank_transfer'],
+        callback_url: `${env.clientUrl}/checkout/complete`,
+        metadata: {
+          ...metadata,
+          description
+        }
+      })
+    });
+
+    const payload = await response.json();
+    if (!response.ok || !payload.status) {
+      throw new ApiError(400, payload.message || 'Unable to initialize Paystack payment');
+    }
+
     return {
       provider: 'paystack',
-      status: 'pending',
-      paymentRef: `paystack_init_${Date.now()}`,
+      status: 'payment_initialized',
+      paymentRef: payload.data.reference,
       amount,
       currency,
-      checkoutUrl: null
+      checkoutUrl: payload.data.authorization_url,
+      accessCode: payload.data.access_code,
+      verificationRequired: true
     };
   }
 

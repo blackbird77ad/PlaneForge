@@ -41,11 +41,20 @@ app.use(
       callback(new Error('Not allowed by CORS'));
     },
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Device-Id']
   })
 );
 app.use(cookieParser());
-app.use(express.json({ limit: '2mb' }));
+app.use(
+  express.json({
+    limit: '2mb',
+    verify: (req, res, buffer) => {
+      if (req.originalUrl?.startsWith('/api/payments/webhooks')) {
+        req.rawBody = buffer.toString('utf8');
+      }
+    }
+  })
+);
 app.use(morgan('dev'));
 app.use(
   rateLimit({

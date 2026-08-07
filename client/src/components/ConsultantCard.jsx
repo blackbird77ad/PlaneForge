@@ -2,7 +2,7 @@ import { Award, CalendarDays } from 'lucide-react';
 
 export const ConsultantCard = ({ consultant, onSelect }) => (
   <article className="consultant-card">
-    <img src={consultant.avatar} alt="" />
+    <img src={consultant.avatar} alt="" loading="lazy" decoding="async" />
     <div>
       <p className="eyebrow">{consultant.specialty}</p>
       <h3>{consultant.name}</h3>

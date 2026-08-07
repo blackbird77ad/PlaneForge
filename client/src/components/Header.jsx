@@ -1,20 +1,29 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Link } from 'react-router-dom';
-import { ChevronDown, Menu, Search, X } from 'lucide-react';
+import { NavLink, Link, useNavigate } from 'react-router-dom';
+import { ChevronDown, LogOut, Menu, Search, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
-import logo from '../assets/planeforge-logo.png';
+import logo from '../assets/planeforge-logo-site.png';
 
 const navItems = [
   { to: '/', label: 'Home' },
   {
     to: '/courses',
     label: 'PCB Courses',
-    dropdown: ['All PCB Courses', 'Beginner Builds', 'Dev Boards & Programmers', 'FPGA Design']
+    dropdown: [
+      { to: '/courses', label: 'All PCB Courses' },
+      { to: '/courses?category=Starter%20PCB%20Builds', label: 'Beginner Builds' },
+      { to: '/courses?category=Embedded%20Dev%20Boards', label: 'Dev Boards & Programmers' },
+      { to: '/courses?category=FPGA%20and%20Digital%20Boards', label: 'FPGA Design' }
+    ]
   },
   {
     to: '/consultations',
     label: 'PlaneForge Consulting',
-    dropdown: ['PCB Project Builds', 'Research & Feasibility', 'Implementation Support']
+    dropdown: [
+      { to: '/consultations#project-builds', label: 'PCB Project Builds' },
+      { to: '/consultations#research', label: 'Research & Feasibility' },
+      { to: '/consultations#implementation', label: 'Implementation Support' }
+    ]
   },
   { to: '/about', label: 'About Us' },
   { to: '/blog', label: 'Blog' },
@@ -22,9 +31,10 @@ const navItems = [
 ];
 
 export const Header = () => {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const { user } = useAuth();
+  const { logout, user } = useAuth();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 18);
@@ -34,6 +44,12 @@ export const Header = () => {
   }, []);
 
   const close = () => setOpen(false);
+
+  const signOut = async () => {
+    await logout();
+    close();
+    navigate('/login');
+  };
 
   return (
     <header className={scrolled ? 'site-header scrolled' : 'site-header'}>
@@ -70,9 +86,9 @@ export const Header = () => {
               </NavLink>
               {item.dropdown && (
                 <div className="nav-dropdown">
-                  {item.dropdown.map((label) => (
-                    <Link key={label} to={item.to} onClick={close}>
-                      {label}
+                  {item.dropdown.map((link) => (
+                    <Link key={link.label} to={link.to} onClick={close}>
+                      {link.label}
                     </Link>
                   ))}
                 </div>
@@ -85,12 +101,26 @@ export const Header = () => {
           <Link className="header-search" to="/search" aria-label="Search PlaneForge">
             <Search size={24} strokeWidth={2.25} />
           </Link>
-          <Link className="button ghost small" to={user ? `/dashboard/${user.role}` : '/login'}>
-            Login
-          </Link>
-          <Link className="button primary small" to="/register">
-            Register
-          </Link>
+          {user ? (
+            <>
+              <Link className="button ghost small" to="/profile" onClick={close}>
+                Account
+              </Link>
+              <button className="button primary small" type="button" onClick={signOut}>
+                <LogOut size={17} />
+                Logout
+              </button>
+            </>
+          ) : (
+            <>
+              <Link className="button ghost small" to="/login">
+                Login
+              </Link>
+              <Link className="button primary small" to="/signup">
+                Sign Up
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>

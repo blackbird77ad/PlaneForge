@@ -1,4 +1,5 @@
 import { BlogPost } from '../models/BlogPost.js';
+import { ContactInquiry } from '../models/ContactInquiry.js';
 import { Course } from '../models/Course.js';
 import { NewsletterSubscription } from '../models/NewsletterSubscription.js';
 import { User } from '../models/User.js';
@@ -37,4 +38,51 @@ export const subscribeNewsletter = asyncHandler(async (req, res) => {
   );
 
   res.status(201).json({ message: 'Newsletter subscription confirmed' });
+});
+
+export const submitContactInquiry = asyncHandler(async (req, res) => {
+  const {
+    intent = 'general',
+    topic,
+    customTopic,
+    name,
+    email,
+    organization,
+    role,
+    subject,
+    message
+  } = req.body;
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const selectedTopic = (customTopic || topic || '').trim();
+
+  if (!name?.trim() || !emailPattern.test(email || '') || !selectedTopic || !subject?.trim() || !message?.trim()) {
+    throw new ApiError(400, 'Name, valid email, topic, subject, and message are required');
+  }
+
+  const inquiry = await ContactInquiry.create({
+    intent,
+    topic: selectedTopic,
+    topicSource: customTopic ? 'custom' : 'selected',
+    name,
+    email,
+    organization,
+    role,
+    subject,
+    message,
+    priority: ['b2b', 'consulting', 'collaboration', 'partnership'].includes(intent)
+      ? 'high'
+      : 'normal',
+    ipAddress: req.ip || req.socket?.remoteAddress,
+    userAgent: req.headers['user-agent']
+  });
+
+  res.status(201).json({
+    message: 'Inquiry received. PlaneForge will review it by category and respond by email.',
+    inquiry: {
+      id: inquiry._id,
+      intent: inquiry.intent,
+      topic: inquiry.topic,
+      status: inquiry.status
+    }
+  });
 });

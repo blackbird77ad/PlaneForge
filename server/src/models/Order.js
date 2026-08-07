@@ -27,7 +27,7 @@ const orderSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'paid', 'failed', 'refunded'],
+      enum: ['pending', 'payment_initialized', 'verified', 'paid', 'failed', 'refunded'],
       default: 'pending'
     },
     paymentRef: {
@@ -35,6 +35,9 @@ const orderSchema = new mongoose.Schema(
       required: true
     },
     couponCode: String,
+    accessGrantedAt: Date,
+    verifiedAt: Date,
+    rawPaymentEvent: mongoose.Schema.Types.Mixed,
     invoiceNumber: {
       type: String,
       required: true

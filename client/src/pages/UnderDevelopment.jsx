@@ -1,7 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { ArrowRight, Hammer, Linkedin, Mail } from 'lucide-react';
-
-const linkedInUrl = 'https://www.linkedin.com/company/planeforge?trk=blended-typeahead';
+import { ArrowRight, Hammer, Mail } from 'lucide-react';
 
 const labels = {
   '/courses': 'PCB Courses',
@@ -45,10 +43,6 @@ export const UnderDevelopment = () => {
           <a className="button ghost" href="mailto:planeforge1@gmail.com">
             <Mail size={18} />
             Email Us
-          </a>
-          <a className="button ghost" href={linkedInUrl} target="_blank" rel="noreferrer">
-            <Linkedin size={18} />
-            LinkedIn
           </a>
         </div>
       </section>

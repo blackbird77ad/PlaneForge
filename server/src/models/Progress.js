@@ -16,9 +16,45 @@ const progressSchema = new mongoose.Schema(
       {
         moduleId: String,
         lessonId: String,
+        watchedSeconds: {
+          type: Number,
+          default: 0
+        },
+        durationSeconds: {
+          type: Number,
+          default: 0
+        },
         completedAt: Date
       }
     ],
+    lessonProgress: [
+      {
+        moduleId: String,
+        lessonId: String,
+        positionSeconds: {
+          type: Number,
+          default: 0
+        },
+        durationSeconds: {
+          type: Number,
+          default: 0
+        },
+        watchedSeconds: {
+          type: Number,
+          default: 0
+        },
+        completedAt: Date,
+        lastWatchedAt: Date
+      }
+    ],
+    currentLesson: {
+      moduleId: String,
+      lessonId: String
+    },
+    totalTimeSeconds: {
+      type: Number,
+      default: 0
+    },
     percentComplete: {
       type: Number,
       default: 0

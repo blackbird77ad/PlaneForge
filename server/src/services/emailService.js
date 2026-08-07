@@ -31,6 +31,32 @@ export const sendEnrollmentEmail = ({ user, course, invoiceNumber }) =>
     `
   });
 
+export const sendLoginCodeEmail = ({ user, code, expiresAt }) =>
+  sendEmail({
+    to: user.email,
+    subject: 'Your PlaneForge login code',
+    html: `
+      <h1>Your login code</h1>
+      <p>Hello ${user.name}, use this one-time code to finish signing in to PlaneForge Academy:</p>
+      <p style="font-size: 28px; font-weight: 700; letter-spacing: 6px;">${code}</p>
+      <p>This code expires at <strong>${expiresAt.toUTCString()}</strong>.</p>
+      <p>If you did not request this code, you can ignore this email.</p>
+    `
+  });
+
+export const sendPasswordResetCodeEmail = ({ user, code, expiresAt }) =>
+  sendEmail({
+    to: user.email,
+    subject: 'Reset your PlaneForge password',
+    html: `
+      <h1>Password reset code</h1>
+      <p>Hello ${user.name}, use this one-time code to reset your PlaneForge password:</p>
+      <p style="font-size: 28px; font-weight: 700; letter-spacing: 6px;">${code}</p>
+      <p>This code expires at <strong>${expiresAt.toUTCString()}</strong>.</p>
+      <p>If you did not request a password reset, you can ignore this email.</p>
+    `
+  });
+
 export const sendConsultationEmail = ({ user, consultant, consultation }) =>
   sendEmail({
     to: user.email,

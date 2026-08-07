@@ -8,6 +8,10 @@ export const ProtectedRoute = ({ roles, children }) => {
   const location = useLocation();
 
   if (!user) {
+    if (roles?.length === 1 && roles.includes('admin')) {
+      return <Navigate to="/admin" replace state={{ from: location }} />;
+    }
+
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 

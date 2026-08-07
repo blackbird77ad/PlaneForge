@@ -1,9 +1,8 @@
 import { Link } from 'react-router-dom';
-import { Award, BookOpen, Clock, Linkedin, Mail, ShieldCheck } from 'lucide-react';
+import { Award, BookOpen, Clock, Mail, ShieldCheck } from 'lucide-react';
 import { NewsletterForm } from './NewsletterForm.jsx';
-import logo from '../assets/planeforge-logo.png';
+import logo from '../assets/planeforge-logo-site.png';
 
-const linkedInUrl = 'https://www.linkedin.com/company/planeforge?trk=blended-typeahead';
 const email = 'planeforge1@gmail.com';
 
 export const Footer = () => (
@@ -33,7 +32,7 @@ export const Footer = () => (
 
     <div className="footer-grid section-inner">
       <section>
-        <img className="footer-logo" src={logo} alt="PlaneForge Academy" />
+        <img className="footer-logo" src={logo} alt="PlaneForge Academy" loading="lazy" decoding="async" />
         <p>
           Teaching PCB design through hands-on, project-based courses from first breadboard
           builds to flight controllers and FPGA boards.
@@ -42,41 +41,38 @@ export const Footer = () => (
           <a href={`mailto:${email}`}>
             <Mail size={18} /> {email}
           </a>
-          <a href={linkedInUrl} target="_blank" rel="noreferrer">
-            <Linkedin size={18} /> LinkedIn
-          </a>
         </div>
       </section>
 
       <section>
-        <h3>Quick links</h3>
-        <Link to="/">Home</Link>
+        <h3>Products</h3>
         <Link to="/courses">PCB Courses</Link>
-        <Link to="/about">About</Link>
+        <Link to="/consultations">Consulting</Link>
+        <Link to="/search">Search</Link>
+        <Link to="/signup">Learner Account</Link>
+      </section>
+
+      <section>
+        <h3>Resources</h3>
         <Link to="/blog">Blog</Link>
-        <Link to="/contact">Contact Us</Link>
-      </section>
-
-      <section>
-        <h3>Course Categories</h3>
-        <Link to="/courses">All PCB Courses</Link>
-        <Link to="/courses">Beginner Builds</Link>
-        <Link to="/courses">Dev Boards & Programmers</Link>
-        <Link to="/courses">Sensor Breakout Boards</Link>
-        <Link to="/courses">High-Speed & Mixed-Signal</Link>
-        <Link to="/courses">FPGA Design</Link>
-        <Link to="/courses">Drone & Flight Controller</Link>
-        <Link to="/courses">Capstone Projects</Link>
-      </section>
-
-      <section>
-        <h3>Support</h3>
         <Link to="/faq">FAQ</Link>
         <Link to="/help">Help Center</Link>
+        <Link to="/testimonials">Testimonials</Link>
+        <Link to="/courses?category=Capstone%20and%20Professional%20Practice">Capstone Projects</Link>
+      </section>
+
+      <section>
+        <h3>Legal</h3>
         <Link to="/terms">Terms & Conditions</Link>
         <Link to="/privacy">Privacy Policy</Link>
         <Link to="/refunds">Refund Policy</Link>
-        <Link to="/contact">Contact Support</Link>
+      </section>
+
+      <section>
+        <h3>Contact</h3>
+        <a href={`mailto:${email}`}>
+          <Mail size={18} /> Email
+        </a>
       </section>
 
       <section>
