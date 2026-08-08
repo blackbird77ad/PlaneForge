@@ -57,17 +57,6 @@ npm run client
 npm run seed
 ```
 
-## Demo Accounts
-
-All seeded accounts use `Password123!`.
-
-- `student@planeforge.test`
-- `consultant@planeforge.test`
-- `partner@planeforge.test`
-- `admin@planeforge.test`
-
-The React app also includes local fallback demo accounts through the login screen, so the role dashboards can be previewed before MongoDB is running.
-
 ## API Areas
 
 - `POST /api/auth/register`
