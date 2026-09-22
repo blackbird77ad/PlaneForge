@@ -1,12 +1,18 @@
 import { NavLink } from 'react-router-dom';
-import { Award, BarChart3, BookOpen, BriefcaseBusiness, CalendarDays, FileText, Inbox, Settings, UserRound } from 'lucide-react';
+import { Award, BarChart3, BookOpen, BriefcaseBusiness, CalendarDays, FileText, Inbox, Package, Settings, UserRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const navByRole = {
+  user: [
+    { to: '/dashboard/user', label: 'Learning', icon: BookOpen },
+    { to: '/dashboard/user#certificates', label: 'Certificates', icon: Award },
+    { to: '/dashboard/user#orders', label: 'Purchases', icon: FileText },
+    { to: '/profile', label: 'Profile', icon: UserRound }
+  ],
   student: [
-    { to: '/dashboard/student', label: 'Learning', icon: BookOpen },
-    { to: '/dashboard/student#certificates', label: 'Certificates', icon: Award },
-    { to: '/dashboard/student#orders', label: 'Purchases', icon: FileText },
+    { to: '/dashboard/user', label: 'Learning', icon: BookOpen },
+    { to: '/dashboard/user#certificates', label: 'Certificates', icon: Award },
+    { to: '/dashboard/user#orders', label: 'Purchases', icon: FileText },
     { to: '/profile', label: 'Profile', icon: UserRound }
   ],
   consultant: [
@@ -21,10 +27,13 @@ const navByRole = {
     { to: '/dashboard/admin', label: 'Overview', icon: BarChart3 },
     { to: '/dashboard/admin#inquiries', label: 'Inquiries', icon: Inbox },
     { to: '/dashboard/admin#content', label: 'Content', icon: BookOpen },
+    { to: '/dashboard/admin#products', label: 'Products', icon: Package },
     { to: '/dashboard/admin#payments', label: 'Payments', icon: FileText },
     { to: '/dashboard/admin#settings', label: 'Settings', icon: Settings }
   ]
 };
+
+const roleLabel = (role) => (['student', 'learner', 'buyer', 'user'].includes(role) ? 'user' : role || 'account');
 
 export const DashboardShell = ({ children, title, subtitle }) => {
   const { user } = useAuth();
@@ -37,7 +46,7 @@ export const DashboardShell = ({ children, title, subtitle }) => {
           {user?.avatar ? <img src={user.avatar} alt="" /> : <span>{user?.name?.slice(0, 1)}</span>}
           <div>
             <strong>{user?.name}</strong>
-            <small>{user?.role}</small>
+            <small>{roleLabel(user?.role)}</small>
           </div>
         </div>
         <nav>
@@ -51,7 +60,7 @@ export const DashboardShell = ({ children, title, subtitle }) => {
       </aside>
       <main className="dashboard-main">
         <div className="page-heading compact-heading">
-          <p className="eyebrow">{user?.role} dashboard</p>
+          <p className="eyebrow">{roleLabel(user?.role)} dashboard</p>
           <h1>{title}</h1>
           <p>{subtitle}</p>
         </div>

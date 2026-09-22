@@ -8,16 +8,17 @@ import {
   FileText,
   Lock,
   PlayCircle,
+  ShoppingCart,
   Star,
   Users
 } from 'lucide-react';
-import { getCourse } from '../api/client.js';
+import { addCartItem, getCourse } from '../api/client.js';
 import { CourseCard } from '../components/CourseCard.jsx';
 import { courses as allCourses } from '../data/catalog.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const money = (value, currency = 'USD') =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(value);
+  new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(Number(value || 0));
 
 const owns = (user, course) => {
   const ownedCourses = (user?.ownedCourses || []).map(String);
@@ -41,6 +42,9 @@ export const CourseDetails = () => {
   const [course, setCourse] = useState(initialCourse || null);
   const [status, setStatus] = useState(initialCourse ? 'ready' : 'loading');
   const [openModule, setOpenModule] = useState(0);
+  const [cartMessage, setCartMessage] = useState('');
+  const [cartError, setCartError] = useState('');
+  const [cartBusy, setCartBusy] = useState(false);
 
   useEffect(() => {
     const localCourse = findCatalogCourse(slug);
@@ -80,7 +84,9 @@ export const CourseDetails = () => {
   const ownsCourse = owns(user, course);
   const related = allCourses.filter((item) => item.slug !== course.slug).slice(0, 3);
   const hasRating = Number(course.rating) > 0;
-  const hasStudents = Number(course.studentsEnrolled) > 0;
+  const studentsEnrolled = Number(course.studentsEnrolled || 0);
+  const hasStudents = studentsEnrolled > 0;
+  const modules = Array.isArray(course.modules) ? course.modules : [];
 
   const action = () => {
     if (ownsCourse) {
@@ -94,6 +100,35 @@ export const CourseDetails = () => {
     }
 
     navigate(`/checkout/${course.slug}`);
+  };
+
+  const addCourseToCart = async () => {
+    setCartMessage('');
+    setCartError('');
+
+    if (ownsCourse) {
+      navigate(`/learn/${course.slug}`);
+      return;
+    }
+
+    if (!user) {
+      navigate('/login', { state: { from: `/courses/${course.slug}` } });
+      return;
+    }
+
+    setCartBusy(true);
+    try {
+      await addCartItem({
+        courseId: course._id || course.id,
+        quantity: 1,
+        source: 'course_detail'
+      });
+      setCartMessage('Added to cart.');
+    } catch (err) {
+      setCartError(err.message);
+    } finally {
+      setCartBusy(false);
+    }
   };
 
   return (
@@ -116,13 +151,13 @@ export const CourseDetails = () => {
             )}
             {hasStudents && (
               <span>
-                <Users size={17} /> {course.studentsEnrolled.toLocaleString()} students
+                <Users size={17} /> {studentsEnrolled.toLocaleString()} students
               </span>
             )}
             <span>
-              <Clock size={17} /> {course.duration}
+              <Clock size={17} /> {course.duration || 'Self-paced'}
             </span>
-            <span>{course.language}</span>
+            <span>{course.language || 'English'}</span>
           </div>
         </div>
         <aside className="enroll-panel">
@@ -133,6 +168,14 @@ export const CourseDetails = () => {
             {ownsCourse ? <PlayCircle size={18} /> : <CreditCard size={18} />}
             {ownsCourse ? 'Continue Learning' : 'Enroll Now'}
           </button>
+          {!ownsCourse && (
+            <button className="button ghost full" type="button" onClick={addCourseToCart} disabled={cartBusy}>
+              <ShoppingCart size={18} />
+              {cartBusy ? 'Adding' : 'Add to Cart'}
+            </button>
+          )}
+          {cartMessage && <p className="form-success">{cartMessage}</p>}
+          {cartError && <p className="form-error">{cartError}</p>}
           <span>
             <Award size={16} /> {course.certificateAvailable ? 'Certificate available' : 'Certificate not included'}
           </span>
@@ -183,7 +226,7 @@ export const CourseDetails = () => {
 
           <h2>Curriculum</h2>
           <div className="curriculum">
-            {course.modules?.map((module, index) => (
+            {modules.length ? modules.map((module, index) => (
               <article key={module._id || module.title}>
                 <button type="button" onClick={() => setOpenModule(openModule === index ? -1 : index)}>
                   <span>{module.title}</span>
@@ -206,7 +249,7 @@ export const CourseDetails = () => {
                   </div>
                 )}
               </article>
-            ))}
+            )) : <p>Curriculum details are being prepared.</p>}
           </div>
 
           {!!course.reviews?.length && (

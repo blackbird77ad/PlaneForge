@@ -1,58 +1,229 @@
-import { useState } from 'react';
-import { UserRound } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Camera, LoaderCircle, Save, Trash2, UserRound } from 'lucide-react';
 import { DashboardShell } from '../components/DashboardShell.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
+const emptyForm = {
+  name: '',
+  title: '',
+  avatar: '',
+  organization: '',
+  country: '',
+  city: '',
+  website: '',
+  headline: '',
+  experienceLevel: '',
+  learningGoal: ''
+};
+
+const formFromUser = (user) => ({
+  name: user?.name || '',
+  title: user?.title || '',
+  avatar: user?.avatar || '',
+  organization: user?.profile?.organization || '',
+  country: user?.profile?.country || '',
+  city: user?.profile?.city || '',
+  website: user?.profile?.website || '',
+  headline: user?.profile?.headline || '',
+  experienceLevel: user?.profile?.experienceLevel || '',
+  learningGoal: user?.profile?.learningGoal || ''
+});
+
+const formatDateOfBirth = (value) => {
+  if (!value) return 'Not set';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Not set';
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium'
+  }).format(date);
+};
+
 export const Profile = () => {
   const { user, updateUser } = useAuth();
-  const [form, setForm] = useState({
-    name: user?.name || '',
-    title: user?.title || '',
-    organization: user?.profile?.organization || '',
-    country: user?.profile?.country || ''
-  });
-  const [saved, setSaved] = useState(false);
+  const [form, setForm] = useState(() => (user ? formFromUser(user) : emptyForm));
+  const [status, setStatus] = useState({ type: '', message: '' });
+  const [saving, setSaving] = useState(false);
 
-  const submit = (event) => {
+  useEffect(() => {
+    setForm(user ? formFromUser(user) : emptyForm);
+  }, [user]);
+
+  const setField = (field) => (event) => {
+    setStatus({ type: '', message: '' });
+    setForm((current) => ({ ...current, [field]: event.target.value }));
+  };
+
+  const submit = async (event) => {
     event.preventDefault();
-    updateUser({
-      name: form.name,
-      title: form.title,
-      profile: {
-        ...(user?.profile || {}),
-        organization: form.organization,
-        country: form.country
-      }
-    });
-    setSaved(true);
+    setSaving(true);
+    setStatus({ type: '', message: '' });
+
+    try {
+      const nextUser = await updateUser({
+        name: form.name,
+        title: form.title,
+        avatar: form.avatar,
+        profile: {
+          organization: form.organization,
+          country: form.country,
+          city: form.city,
+          website: form.website,
+          headline: form.headline,
+          experienceLevel: form.experienceLevel,
+          learningGoal: form.learningGoal
+        }
+      });
+      if (nextUser) setForm(formFromUser(nextUser));
+      setStatus({ type: 'success', message: 'Profile updated.' });
+    } catch (error) {
+      setStatus({ type: 'error', message: error.message || 'Profile could not be updated.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const chooseAvatar = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setStatus({ type: 'error', message: 'Choose an image file for your profile photo.' });
+      return;
+    }
+
+    if (file.size > 900 * 1024) {
+      setStatus({ type: 'error', message: 'Choose an image under 900 KB.' });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setForm((current) => ({ ...current, avatar: reader.result || '' }));
+      setStatus({ type: '', message: '' });
+    };
+    reader.onerror = () => {
+      setStatus({ type: 'error', message: 'That image could not be loaded.' });
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
-    <DashboardShell title="Profile" subtitle="Manage personal information used across learning, invoices, and bookings.">
+    <DashboardShell title="Profile" subtitle="Manage the account details used across learning, purchases, and bookings.">
       <form className="profile-form" onSubmit={submit}>
-        <div className="profile-avatar">
-          {user?.avatar ? <img src={user.avatar} alt="" /> : <UserRound size={36} />}
+        <div className="profile-avatar-row">
+          <div className="profile-avatar">
+            {form.avatar ? <img src={form.avatar} alt="" /> : <UserRound size={36} />}
+          </div>
+          <div className="profile-avatar-actions">
+            <label>
+              Profile image URL
+              <input
+                type="url"
+                value={form.avatar.startsWith('data:') ? '' : form.avatar}
+                onChange={setField('avatar')}
+                placeholder="https://example.com/photo.jpg"
+              />
+            </label>
+            <div className="profile-inline-actions">
+              <label className="button secondary profile-upload">
+                <Camera size={17} />
+                Upload Image
+                <input type="file" accept="image/*" onChange={chooseAvatar} />
+              </label>
+              {form.avatar && (
+                <button
+                  className="button danger"
+                  type="button"
+                  onClick={() => setForm((current) => ({ ...current, avatar: '' }))}
+                >
+                  <Trash2 size={17} />
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
         </div>
+
+        <div className="locked-account-grid">
+          <label>
+            Email
+            <input value={user?.email || ''} readOnly disabled />
+          </label>
+          <label>
+            Contact number
+            <input value={user?.contactNumber || user?.profile?.phone || ''} readOnly disabled />
+          </label>
+          <label>
+            Date of birth
+            <input value={formatDateOfBirth(user?.dateOfBirth)} readOnly disabled />
+          </label>
+        </div>
+
+        <div className="profile-grid">
+          <label>
+            Name
+            <input value={form.name} onChange={setField('name')} required />
+          </label>
+          <label>
+            Professional title
+            <input value={form.title} onChange={setField('title')} placeholder="PCB design learner" />
+          </label>
+          <label>
+            Organization
+            <input value={form.organization} onChange={setField('organization')} />
+          </label>
+          <label>
+            Country
+            <input value={form.country} onChange={setField('country')} />
+          </label>
+          <label>
+            City
+            <input value={form.city} onChange={setField('city')} />
+          </label>
+          <label>
+            Website
+            <input type="url" value={form.website} onChange={setField('website')} placeholder="https://example.com" />
+          </label>
+          <label>
+            Experience level
+            <input value={form.experienceLevel} onChange={setField('experienceLevel')} placeholder="Beginner, intermediate, advanced" />
+          </label>
+        </div>
+
         <label>
-          Name
-          <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+          Headline
+          <input value={form.headline} onChange={setField('headline')} placeholder="What you are building or learning now" />
         </label>
+
         <label>
-          Professional title
-          <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} />
+          Learning goal
+          <textarea
+            value={form.learningGoal}
+            onChange={setField('learningGoal')}
+            placeholder="Add the courses, products, or hardware skills you want to focus on."
+          />
         </label>
-        <label>
-          Organization
-          <input value={form.organization} onChange={(event) => setForm({ ...form, organization: event.target.value })} />
-        </label>
-        <label>
-          Country
-          <input value={form.country} onChange={(event) => setForm({ ...form, country: event.target.value })} />
-        </label>
-        <button className="button primary" type="submit">
-          Save Profile
-        </button>
-        {saved && <p className="form-success">Profile updated.</p>}
+
+        <div className="profile-actions">
+          <button className="button primary" type="submit" disabled={saving}>
+            {saving ? <LoaderCircle className="spin" size={17} /> : <Save size={17} />}
+            Save Profile
+          </button>
+          <button
+            className="button secondary"
+            type="button"
+            onClick={() => {
+              setForm(user ? formFromUser(user) : emptyForm);
+              setStatus({ type: '', message: '' });
+            }}
+            disabled={saving}
+          >
+            Reset Changes
+          </button>
+        </div>
+        {status.type === 'success' && <p className="form-success">{status.message}</p>}
+        {status.type === 'error' && <p className="form-error">{status.message}</p>}
       </form>
     </DashboardShell>
   );

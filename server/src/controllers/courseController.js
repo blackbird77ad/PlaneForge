@@ -1,4 +1,5 @@
 import { Course } from '../models/Course.js';
+import { CourseComment } from '../models/CourseComment.js';
 import { User } from '../models/User.js';
 import { hasCourseAccess } from '../services/accessService.js';
 import { createDirectUploadIntent, createPlaybackGrant } from '../services/streamingService.js';
@@ -194,6 +195,58 @@ export const getLessonPlayback = asyncHandler(async (req, res) => {
       session: req.authSession
     })
   });
+});
+
+export const listCourseComments = asyncHandler(async (req, res) => {
+  const course = await Course.findOne({ slug: req.params.slug, status: 'published' });
+
+  if (!course) {
+    throw new ApiError(404, 'Course not found');
+  }
+
+  const canAccess = await hasCourseAccess({ user: req.user, courseId: course._id });
+  if (!canAccess) {
+    throw new ApiError(403, 'Purchase this course to view comments');
+  }
+
+  const comments = await CourseComment.find({ course: course._id })
+    .populate('user', 'name email role avatar')
+    .sort({ createdAt: -1 })
+    .limit(50);
+
+  res.json({ comments });
+});
+
+export const createCourseComment = asyncHandler(async (req, res) => {
+  const { lessonId, message, source = 'lesson_comment' } = req.body;
+  const course = await Course.findOne({ slug: req.params.slug, status: 'published' });
+
+  if (!course) {
+    throw new ApiError(404, 'Course not found');
+  }
+
+  const canAccess = await hasCourseAccess({ user: req.user, courseId: course._id });
+  if (!canAccess) {
+    throw new ApiError(403, 'Purchase this course before adding comments');
+  }
+
+  if (!String(message || '').trim()) {
+    throw new ApiError(400, 'Comment message is required');
+  }
+
+  const match = lessonId ? findLesson(course, lessonId) : null;
+  const comment = await CourseComment.create({
+    user: req.user._id,
+    course: course._id,
+    lessonId: match?.lesson?._id?.toString() || undefined,
+    lessonTitle: match?.lesson?.title || undefined,
+    message: String(message).trim(),
+    source: source === 'tutor_request' ? 'tutor_request' : 'lesson_comment'
+  });
+
+  await comment.populate('user', 'name email role avatar');
+
+  res.status(201).json({ comment });
 });
 
 export const createCourse = asyncHandler(async (req, res) => {

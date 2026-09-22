@@ -26,7 +26,7 @@ export const ResetPassword = () => {
 
     try {
       if (step === 'request') {
-        const data = await startPasswordReset({ email: form.email, role: 'learner' });
+        const data = await startPasswordReset({ email: form.email });
         setMessage(data.devCode ? `${data.message} Development code: ${data.devCode}` : data.message);
         setStep('reset');
         return;
@@ -44,7 +44,6 @@ export const ResetPassword = () => {
 
       const data = await finishPasswordReset({
         email: form.email,
-        role: 'learner',
         code: form.code,
         password: form.password
       });
@@ -64,7 +63,7 @@ export const ResetPassword = () => {
         <h1>{step === 'request' ? 'Request a reset code' : 'Create a new password'}</h1>
         <p>
           {step === 'request'
-            ? 'Enter the email address for your learner account, then PlaneForge will send a one-time reset code.'
+            ? 'Enter the email address for your PlaneForge account, then PlaneForge will send a one-time reset code.'
             : 'Enter the reset code from your email and set a new password.'}
         </p>
         <form onSubmit={submit}>

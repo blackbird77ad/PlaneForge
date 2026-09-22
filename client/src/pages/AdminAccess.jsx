@@ -4,11 +4,16 @@ import { KeyRound, LogIn, RotateCcw, ShieldCheck, UserPlus } from 'lucide-react'
 import { AdminDashboard } from './AdminDashboard.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
+const today = new Date().toISOString().slice(0, 10);
+
 const initialForms = {
   login: { email: '', password: '' },
-  signup: { name: '', email: '', password: '', adminSetupCode: '' },
+  signup: { name: '', email: '', contactNumber: '', dateOfBirth: '', password: '', adminSetupCode: '' },
   reset: { email: '', code: '', password: '', confirmPassword: '' }
 };
+
+const dashboardPath = (role) =>
+  `/dashboard/${['student', 'learner', 'buyer'].includes(role) ? 'user' : role || 'user'}`;
 
 export const AdminAccess = () => {
   const navigate = useNavigate();
@@ -85,6 +90,11 @@ export const AdminAccess = () => {
       return;
     }
 
+    if (!challenge && (!forms.signup.contactNumber.trim() || !forms.signup.dateOfBirth)) {
+      setError('Contact number and date of birth are required.');
+      return;
+    }
+
     setBusy(true);
     try {
       if (!challenge) {
@@ -150,12 +160,12 @@ export const AdminAccess = () => {
         <section className="auth-panel">
           <p className="eyebrow">Admin</p>
           <h1>Admin access is separate</h1>
-          <p>You are signed in as a learner. Sign out first to use the private admin access page.</p>
+          <p>You are signed in with a non-admin account. Sign out first to use the private admin access page.</p>
           <button className="button primary full" type="button" onClick={logout}>
             Sign Out
           </button>
-          <Link className="button ghost full auth-secondary" to="/dashboard/student">
-            Return to learner dashboard
+          <Link className="button ghost full auth-secondary" to={dashboardPath(user.role)}>
+            Return to dashboard
           </Link>
         </section>
       </main>
@@ -258,6 +268,25 @@ export const AdminAccess = () => {
                     value={forms.signup.password}
                     onChange={(event) => update('signup', 'password', event.target.value)}
                     type="password"
+                    required
+                  />
+                </label>
+                <label>
+                  Contact number
+                  <input
+                    value={forms.signup.contactNumber}
+                    onChange={(event) => update('signup', 'contactNumber', event.target.value)}
+                    type="tel"
+                    required
+                  />
+                </label>
+                <label>
+                  Date of birth
+                  <input
+                    value={forms.signup.dateOfBirth}
+                    onChange={(event) => update('signup', 'dateOfBirth', event.target.value)}
+                    type="date"
+                    max={today}
                     required
                   />
                 </label>

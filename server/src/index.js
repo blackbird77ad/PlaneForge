@@ -4,14 +4,16 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import morgan from 'morgan';
-import { connectDb } from './config/db.js';
+import { connectDb, databaseStatus, isDbConnected, startDbReconnectLoop } from './config/db.js';
 import { env } from './config/env.js';
 import { adminRoutes } from './routes/adminRoutes.js';
 import { authRoutes } from './routes/authRoutes.js';
 import { consultationRoutes } from './routes/consultationRoutes.js';
 import { contentRoutes } from './routes/contentRoutes.js';
 import { courseRoutes } from './routes/courseRoutes.js';
+import { demoRoutes } from './routes/demoRoutes.js';
 import { orderRoutes } from './routes/orderRoutes.js';
+import { productRoutes } from './routes/productRoutes.js';
 import { userRoutes } from './routes/userRoutes.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 
@@ -66,22 +68,49 @@ app.use(
 );
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', service: 'PlaneForge API' });
+  res.json({
+    status: 'ok',
+    service: 'PlaneForge API',
+    mode: env.demoBackend ? 'demo' : 'database',
+    database: env.demoBackend ? { status: 'not_required' } : databaseStatus()
+  });
 });
 
-app.use('/api/auth', authRoutes);
-app.use('/api/courses', courseRoutes);
-app.use('/api/consultations', consultationRoutes);
-app.use('/api/payments', orderRoutes);
-app.use('/api/content', contentRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/admin', adminRoutes);
+const requireDatabase = (req, res, next) => {
+  if (isDbConnected()) {
+    next();
+    return;
+  }
+
+  res.status(503).json({
+    message: 'Database connection is not ready. Check the MongoDB URI and network access.',
+    database: databaseStatus()
+  });
+};
+
+if (env.demoBackend) {
+  app.use('/api', demoRoutes);
+} else {
+  app.use('/api', requireDatabase);
+  app.use('/api/auth', authRoutes);
+  app.use('/api/courses', courseRoutes);
+  app.use('/api/consultations', consultationRoutes);
+  app.use('/api/payments', orderRoutes);
+  app.use('/api/products', productRoutes);
+  app.use('/api/content', contentRoutes);
+  app.use('/api/users', userRoutes);
+  app.use('/api/admin', adminRoutes);
+}
 
 app.use(notFound);
 app.use(errorHandler);
 
-await connectDb();
+if (!env.demoBackend) {
+  await connectDb();
+  startDbReconnectLoop();
+}
 
 app.listen(env.port, () => {
-  console.log(`PlaneForge API running on port ${env.port}`);
+  const mode = env.demoBackend ? 'demo backend' : 'database backend';
+  console.log(`PlaneForge API running on port ${env.port} (${mode})`);
 });

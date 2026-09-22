@@ -28,9 +28,50 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>PlaneForge Academy | Project-Based PCB Design Courses</title>
+    <script>
+      (function () {
+        try {
+          if ('scrollRestoration' in history) {
+            history.scrollRestoration = 'manual';
+          }
+          if (!location.hash) {
+            scrollTo(0, 0);
+          }
+        } catch (error) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      (function () {
+        if (!('serviceWorker' in navigator)) return;
+
+        window.addEventListener('load', function () {
+          try {
+            if (navigator.serviceWorker.getRegistrations) {
+              navigator.serviceWorker.getRegistrations().then(function (registrations) {
+                registrations.forEach(function (registration) {
+                  registration.unregister();
+                });
+              }).catch(function () {});
+            }
+
+            if (window.caches && window.caches.keys) {
+              window.caches.keys().then(function (keys) {
+                keys.filter(function (key) {
+                  return key.indexOf('planeforge') === 0;
+                }).forEach(function (key) {
+                  window.caches.delete(key);
+                });
+              }).catch(function () {});
+            }
+          } catch (error) {
+            console.warn('PlaneForge cache cleanup skipped', error);
+          }
+        });
+      })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

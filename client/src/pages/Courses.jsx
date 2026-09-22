@@ -101,28 +101,7 @@ export const Courses = () => {
     <main className="section page">
       <div className="page-heading">
         <p className="eyebrow">PlaneForge Courses</p>
-        <h1 className="readable-page-title course-page-title">
-          <span>Learn PCB design with courses built for</span>
-          <span>curious makers, students, and engineers</span>
-        </h1>
-        <p>
-          Browse a scalable catalog of project-based PCB courses across beginner builds, embedded
-          dev boards, sensors, power electronics, high-speed design, FPGA hardware, robotics, and
-          capstones.
-        </p>
-      </div>
-
-      <div className="track-shortcuts">
-        {options.category.slice(0, 8).map((category) => (
-          <button
-            className={filters.category === category ? 'active' : ''}
-            type="button"
-            key={category}
-            onClick={() => update('category', filters.category === category ? '' : category)}
-          >
-            {category}
-          </button>
-        ))}
+        <h1 className="readable-page-title course-page-title">PCB Courses</h1>
       </div>
 
       <section className="catalog-tools">

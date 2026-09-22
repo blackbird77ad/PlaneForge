@@ -6,8 +6,10 @@ import {
   logoutRequest,
   requestPasswordReset,
   registerRequest,
+  updateProfileRequest,
   verifyLoginRequest
 } from '../api/client.js';
+import { safeLocalStorage } from '../utils/storage.js';
 
 const AuthContext = createContext(null);
 
@@ -17,7 +19,7 @@ const storageSession = 'planeforge_session';
 
 const readJson = (key) => {
   try {
-    return JSON.parse(localStorage.getItem(key));
+    return JSON.parse(safeLocalStorage.getItem(key));
   } catch {
     return null;
   }
@@ -29,33 +31,33 @@ export const AuthProvider = ({ children }) => {
   const [pendingChallenge, setPendingChallenge] = useState(null);
 
   const persist = (nextUser, token, nextSession) => {
-    localStorage.setItem(storageUser, JSON.stringify(nextUser));
+    safeLocalStorage.setItem(storageUser, JSON.stringify(nextUser));
     if (token) {
-      localStorage.setItem(storageToken, token);
+      safeLocalStorage.setItem(storageToken, token);
     } else {
-      localStorage.removeItem(storageToken);
+      safeLocalStorage.removeItem(storageToken);
     }
-    localStorage.setItem(storageSession, JSON.stringify(nextSession || null));
+    safeLocalStorage.setItem(storageSession, JSON.stringify(nextSession || null));
     setUser(nextUser);
     setSession(nextSession || null);
   };
 
   const clearLocalSession = () => {
-    localStorage.removeItem(storageUser);
-    localStorage.removeItem(storageToken);
-    localStorage.removeItem(storageSession);
+    safeLocalStorage.removeItem(storageUser);
+    safeLocalStorage.removeItem(storageToken);
+    safeLocalStorage.removeItem(storageSession);
     setUser(null);
     setSession(null);
   };
 
   useEffect(() => {
-    const token = localStorage.getItem(storageToken);
+    const token = safeLocalStorage.getItem(storageToken);
     if (!token) return;
 
     getMe()
       .then((data) => {
-        localStorage.setItem(storageUser, JSON.stringify(data.user));
-        localStorage.setItem(storageSession, JSON.stringify(data.session || null));
+        safeLocalStorage.setItem(storageUser, JSON.stringify(data.user));
+        safeLocalStorage.setItem(storageSession, JSON.stringify(data.session || null));
         setUser(data.user);
         setSession(data.session || null);
       })
@@ -70,7 +72,7 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (payload) => {
     const challenge = await registerRequest(payload);
-    setPendingChallenge({ ...challenge, email: payload.email });
+    setPendingChallenge(challenge?.challengeId ? { ...challenge, email: payload.email } : null);
     return challenge;
   };
 
@@ -83,7 +85,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      if (localStorage.getItem(storageToken)) {
+      if (safeLocalStorage.getItem(storageToken)) {
         await logoutRequest();
       }
     } catch {
@@ -110,17 +112,20 @@ export const AuthProvider = ({ children }) => {
         }
       ]
     };
-    persist(nextUser, localStorage.getItem(storageToken), session);
+    persist(nextUser, safeLocalStorage.getItem(storageToken), session);
   };
 
-  const updateUser = (updates) => {
-    if (!user) return;
-    persist({ ...user, ...updates }, localStorage.getItem(storageToken), session);
+  const updateUser = async (updates) => {
+    if (!user) return null;
+    const data = await updateProfileRequest(updates);
+    const nextUser = data.user || { ...user, ...updates };
+    persist(nextUser, safeLocalStorage.getItem(storageToken), session);
+    return nextUser;
   };
 
   const refreshMe = async () => {
     const data = await getMe();
-    persist(data.user, localStorage.getItem(storageToken), data.session);
+    persist(data.user, safeLocalStorage.getItem(storageToken), data.session);
     return data.user;
   };
 

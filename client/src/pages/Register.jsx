@@ -3,14 +3,17 @@ import { Link, useNavigate } from 'react-router-dom';
 import { KeyRound, UserPlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
+const today = new Date().toISOString().slice(0, 10);
+
 export const Register = () => {
   const navigate = useNavigate();
   const { register, verifyLogin } = useAuth();
   const [form, setForm] = useState({
     name: '',
     email: '',
-    password: '',
-    role: 'learner'
+    contactNumber: '',
+    dateOfBirth: '',
+    password: ''
   });
   const [challenge, setChallenge] = useState(null);
   const [code, setCode] = useState('');
@@ -26,15 +29,20 @@ export const Register = () => {
       return;
     }
 
+    if (!challenge && (!form.contactNumber.trim() || !form.dateOfBirth)) {
+      setError('Contact number and date of birth are required.');
+      return;
+    }
+
     setBusy(true);
     try {
       if (!challenge) {
-        const nextChallenge = await register(form);
+        const nextChallenge = await register({ ...form, role: 'user' });
         setChallenge(nextChallenge);
         setCode('');
       } else {
         const user = await verifyLogin({ challengeId: challenge.challengeId, code });
-        navigate(`/dashboard/${user.role}`);
+        navigate('/dashboard/user');
       }
     } catch (err) {
       setError(err.message);
@@ -51,7 +59,7 @@ export const Register = () => {
         <p>
           {challenge
             ? 'Enter the code sent to your email to finish setup.'
-            : 'Create a learner account to enroll in PCB courses, track progress, and access your learning dashboard.'}
+            : 'Create one user account for course enrollment, product purchases, progress, and future product access.'}
         </p>
         <form onSubmit={submit}>
           {!challenge ? (
@@ -70,6 +78,25 @@ export const Register = () => {
                   value={form.email}
                   onChange={(event) => setForm({ ...form, email: event.target.value })}
                   type="email"
+                  required
+                />
+              </label>
+              <label>
+                Contact number
+                <input
+                  value={form.contactNumber}
+                  onChange={(event) => setForm({ ...form, contactNumber: event.target.value })}
+                  type="tel"
+                  required
+                />
+              </label>
+              <label>
+                Date of birth
+                <input
+                  value={form.dateOfBirth}
+                  onChange={(event) => setForm({ ...form, dateOfBirth: event.target.value })}
+                  type="date"
+                  max={today}
                   required
                 />
               </label>

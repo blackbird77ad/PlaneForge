@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Award, BookOpen, CalendarDays, FileText } from 'lucide-react';
+import { Award, BookOpen, CalendarDays, FileText, MessageSquare } from 'lucide-react';
 import { DashboardShell } from '../components/DashboardShell.jsx';
 import { MetricCard } from '../components/MetricCard.jsx';
 import { CourseCard } from '../components/CourseCard.jsx';
@@ -29,6 +29,10 @@ export const StudentDashboard = () => {
   const progress = dashboard?.progress || [];
   const orders = dashboard?.orders || user?.orders || [];
   const certificates = dashboard?.certificates || [];
+  const consultations = dashboard?.consultations || [];
+  const comments = dashboard?.comments || [];
+  const cartItems = dashboard?.cartItems || [];
+  const hasAccountActivity = consultations.length || comments.length || cartItems.length;
   const activeCourses = progress.length
     ? progress.map(courseFromProgress).filter(Boolean)
     : localCourses;
@@ -38,12 +42,14 @@ export const StudentDashboard = () => {
   }, [progress]);
 
   return (
-    <DashboardShell title="Learning command center" subtitle="Continue courses, track progress, and review verified purchases.">
+    <DashboardShell title="Account dashboard" subtitle="Continue courses, track progress, and review PlaneForge activity tied to this email.">
       <div className="metric-grid">
         <MetricCard label="Active courses" value={activeCourses.length} detail="Verified course access" />
         <MetricCard label="Average progress" value={`${averageProgress}%`} detail="Across enrolled courses" />
         <MetricCard label="Certificates" value={certificates.length} detail="Issued after completion" />
         <MetricCard label="Purchases" value={orders.length} detail="Payment history" />
+        <MetricCard label="Messages" value={consultations.length + comments.length} detail="Consulting and course requests" />
+        <MetricCard label="Cart" value={cartItems.filter((item) => item.status === 'active').length} detail="Saved course items" />
       </div>
 
       <section className="dashboard-section">
@@ -78,6 +84,39 @@ export const StudentDashboard = () => {
         </section>
       )}
 
+      <section className="dashboard-section" id="activity">
+        <h2>
+          <MessageSquare size={20} /> Account activity
+        </h2>
+        {hasAccountActivity ? (
+          <div className="table-list learner-activity-list">
+            {consultations.map((consultation) => (
+              <article key={consultation._id}>
+                <span>{consultation.service}</span>
+                <span>{consultation.consultant?.name || 'PlaneForge consultant'}</span>
+                <em>{consultation.status}</em>
+              </article>
+            ))}
+            {comments.map((comment) => (
+              <article key={comment._id}>
+                <span>{comment.source === 'tutor_request' ? 'Tutor request' : 'Course comment'}</span>
+                <span>{comment.course?.title || 'Course'}</span>
+                <em>{comment.status}</em>
+              </article>
+            ))}
+            {cartItems.map((item) => (
+              <article key={item._id}>
+                <span>Cart activity</span>
+                <span>{item.course?.title || item.productName || 'Item'}</span>
+                <em>{item.status}</em>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p>Consulting bookings and support requests appear here.</p>
+        )}
+      </section>
+
       <section className="dashboard-section two-column" id="certificates">
         <article>
           <h2>
@@ -100,7 +139,7 @@ export const StudentDashboard = () => {
           {orders.length ? (
             orders.map((order) => (
               <p key={order._id || order.invoiceNumber}>
-                {order.invoiceNumber} - {order.course?.title || order.courseTitle} - {order.amount} {order.currency || 'USD'} - {order.status}
+                {order.invoiceNumber} - {order.course?.title || order.product?.title || order.invoice?.itemName || order.courseTitle} - {order.amount} {order.currency || 'USD'} - {order.status}
               </p>
             ))
           ) : (

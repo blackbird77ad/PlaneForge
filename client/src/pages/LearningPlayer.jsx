@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { CheckCircle, Lock, PlayCircle, ShieldCheck } from 'lucide-react';
-import { getLearningCourse, getLessonPlayback, saveLessonProgress } from '../api/client.js';
+import { CheckCircle, Lock, MessageSquare, PlayCircle, Send, ShieldCheck } from 'lucide-react';
+import {
+  createCourseComment,
+  getCourseComments,
+  getLearningCourse,
+  getLessonPlayback,
+  saveLessonProgress
+} from '../api/client.js';
 
 const firstLesson = (course) => {
   const module = course?.modules?.find((item) => item.lessons?.length);
@@ -14,6 +20,11 @@ export const LearningPlayer = () => {
   const [course, setCourse] = useState(null);
   const [active, setActive] = useState(null);
   const [playback, setPlayback] = useState(null);
+  const [comments, setComments] = useState([]);
+  const [commentForm, setCommentForm] = useState({ source: 'lesson_comment', message: '' });
+  const [commentMessage, setCommentMessage] = useState('');
+  const [commentError, setCommentError] = useState('');
+  const [commentBusy, setCommentBusy] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const lastSyncRef = useRef(0);
@@ -23,7 +34,9 @@ export const LearningPlayer = () => {
       .then((data) => {
         setCourse(data.course);
         setActive(firstLesson(data.course));
+        return getCourseComments(slug);
       })
+      .then((data) => setComments(data.comments || []))
       .catch((err) => {
         setError(err.message);
       });
@@ -66,6 +79,35 @@ export const LearningPlayer = () => {
       // Progress will retry on the next player event.
     } finally {
       setSaving(false);
+    }
+  };
+
+  const submitComment = async (event) => {
+    event.preventDefault();
+    setCommentMessage('');
+    setCommentError('');
+
+    if (!commentForm.message.trim()) {
+      setCommentError('Write a message before sending.');
+      return;
+    }
+
+    setCommentBusy(true);
+    try {
+      const data = await createCourseComment(slug, {
+        lessonId: active?.lesson?._id,
+        source: commentForm.source,
+        message: commentForm.message
+      });
+      if (data.comment) {
+        setComments((current) => [data.comment, ...current]);
+        setCommentForm((current) => ({ ...current, message: '' }));
+        setCommentMessage(commentForm.source === 'tutor_request' ? 'Tutor request sent.' : 'Comment added.');
+      }
+    } catch (err) {
+      setCommentError(err.message);
+    } finally {
+      setCommentBusy(false);
     }
   };
 
@@ -172,6 +214,66 @@ export const LearningPlayer = () => {
             <CheckCircle size={20} /> Lesson Notes
           </h2>
           <p>{active?.lesson?.description || course.description}</p>
+        </section>
+
+        <section className="dashboard-section lesson-comments">
+          <h2>
+            <MessageSquare size={20} /> Course discussion
+          </h2>
+          <form onSubmit={submitComment}>
+            <fieldset className="segmented comment-mode">
+              <legend>Message type</legend>
+              <label>
+                <input
+                  type="radio"
+                  name="comment-source"
+                  value="lesson_comment"
+                  checked={commentForm.source === 'lesson_comment'}
+                  onChange={(event) => setCommentForm({ ...commentForm, source: event.target.value })}
+                />
+                <span>Comment</span>
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="comment-source"
+                  value="tutor_request"
+                  checked={commentForm.source === 'tutor_request'}
+                  onChange={(event) => setCommentForm({ ...commentForm, source: event.target.value })}
+                />
+                <span>Ask Tutor</span>
+              </label>
+            </fieldset>
+            <label>
+              Message
+              <textarea
+                value={commentForm.message}
+                onChange={(event) => setCommentForm({ ...commentForm, message: event.target.value })}
+                rows={4}
+                maxLength={2000}
+                required
+              />
+            </label>
+            {commentMessage && <p className="form-success">{commentMessage}</p>}
+            {commentError && <p className="form-error">{commentError}</p>}
+            <button className="button primary small" type="submit" disabled={commentBusy}>
+              <Send size={16} />
+              {commentBusy ? 'Sending' : commentForm.source === 'tutor_request' ? 'Send Request' : 'Add Comment'}
+            </button>
+          </form>
+          <div className="comment-list">
+            {comments.map((comment) => (
+              <article key={comment._id}>
+                <div>
+                  <strong>{comment.user?.name || 'PlaneForge account'}</strong>
+                  <small>{comment.lessonTitle || comment.course?.title || course.title}</small>
+                </div>
+                <p>{comment.message}</p>
+                <em>{comment.source === 'tutor_request' ? 'Tutor request' : 'Comment'}</em>
+              </article>
+            ))}
+            {comments.length === 0 && <p className="form-muted">No messages yet.</p>}
+          </div>
         </section>
       </section>
     </main>

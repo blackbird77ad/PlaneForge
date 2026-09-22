@@ -6,7 +6,10 @@ const profileSchema = new mongoose.Schema(
     organization: String,
     country: String,
     headline: String,
-    website: String
+    website: String,
+    city: String,
+    learningGoal: String,
+    experienceLevel: String
   },
   { _id: false }
 );
@@ -36,6 +39,14 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true
     },
+    contactNumber: {
+      type: String,
+      trim: true
+    },
+    dateOfBirth: {
+      type: Date,
+      immutable: true
+    },
     passwordHash: {
       type: String,
       required: true,
@@ -43,8 +54,8 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['student', 'consultant', 'partner', 'admin'],
-      default: 'student'
+      enum: ['user', 'student', 'consultant', 'partner', 'admin'],
+      default: 'user'
     },
     status: {
       type: String,
@@ -77,6 +88,10 @@ const userSchema = new mongoose.Schema(
       }
     ],
     partnerCode: String,
+    commissionRate: {
+      type: Number,
+      default: 0
+    },
     lastLoginAt: Date
   },
   {

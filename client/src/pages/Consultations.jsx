@@ -53,7 +53,7 @@ const categoryOptions = [
   'Drone, Robotics, or IoT Hardware'
 ];
 
-const consultantName = 'Dr. Honu Evans';
+const consultantName = 'Honu Evans';
 
 export const Consultations = () => {
   const [form, setForm] = useState({
@@ -95,7 +95,7 @@ export const Consultations = () => {
         ].join('\n')
       });
 
-      setMessage('Quote request sent. Dr. Honu Evans will follow up by email to discuss scope and pricing.');
+      setMessage(`${consultantName} will follow up by email to discuss scope and pricing.`);
       setForm({
         service: serviceOptions[0],
         category: categoryOptions[0],
@@ -118,7 +118,7 @@ export const Consultations = () => {
         <div className="section-inner public-hero-grid">
           <div>
             <p className="eyebrow">PlaneForge Consulting</p>
-            <h1>Bring PCB projects, products, and hardware decisions to PlaneForge</h1>
+            <h1>PCB consulting for hardware decisions</h1>
             <p>
               Companies use PlaneForge for PCB project planning, hardware research, product builds,
               schematic and layout review, troubleshooting, and implementation decisions.
@@ -255,7 +255,7 @@ export const Consultations = () => {
             {submitting ? 'Sending Request' : 'Send Quote Request'}
           </button>
           <p className="secure-note quote-note">
-            <Mail size={16} /> Dr. Honu Evans will continue the discussion by email before pricing is confirmed.
+            <Mail size={16} /> {consultantName} will continue the discussion by email before pricing is confirmed.
           </p>
           {message && (
             <p className="form-success">

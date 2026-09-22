@@ -1,8 +1,11 @@
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import Stripe from 'stripe';
 import { env } from '../config/env.js';
+import { CartItem } from '../models/CartItem.js';
 import { Course } from '../models/Course.js';
 import { Order } from '../models/Order.js';
+import { Product } from '../models/Product.js';
 import { grantCourseAccess, hasCourseAccess } from '../services/accessService.js';
 import { sendEnrollmentEmail } from '../services/emailService.js';
 import { createInvoice, createInvoiceNumber } from '../services/invoiceService.js';
@@ -21,7 +24,8 @@ const applyCoupon = (price, couponCode) => {
 const completeVerifiedOrder = async ({ order, rawPaymentEvent, source = 'payment_webhook' }) => {
   const populatedOrder = await Order.findById(order._id)
     .populate('user')
-    .populate('course');
+    .populate('course')
+    .populate('product');
 
   if (!populatedOrder) {
     throw new ApiError(404, 'Order not found');
@@ -31,14 +35,15 @@ const completeVerifiedOrder = async ({ order, rawPaymentEvent, source = 'payment
     throw new ApiError(409, 'This order cannot grant access');
   }
 
-  const shouldGrantAccess = !populatedOrder.accessGrantedAt;
+  const shouldGrantCourseAccess = populatedOrder.itemType === 'course' && !populatedOrder.accessGrantedAt;
+  const shouldFulfillProduct = populatedOrder.itemType === 'product' && !populatedOrder.fulfilledAt;
 
   populatedOrder.status = 'verified';
   populatedOrder.verifiedAt = populatedOrder.verifiedAt || new Date();
   populatedOrder.rawPaymentEvent = rawPaymentEvent || populatedOrder.rawPaymentEvent;
   await populatedOrder.save();
 
-  if (shouldGrantAccess) {
+  if (shouldGrantCourseAccess) {
     await grantCourseAccess({
       userId: populatedOrder.user._id,
       course: populatedOrder.course,
@@ -53,9 +58,48 @@ const completeVerifiedOrder = async ({ order, rawPaymentEvent, source = 'payment
     });
   }
 
+  if (shouldFulfillProduct && populatedOrder.product) {
+    const productUpdates = {
+      $inc: {
+        soldCount: populatedOrder.quantity || 1
+      }
+    };
+
+    if (populatedOrder.product.inventory?.track) {
+      productUpdates.$inc['inventory.quantity'] = -Math.max(1, populatedOrder.quantity || 1);
+    }
+
+    await Product.findByIdAndUpdate(populatedOrder.product._id, productUpdates);
+    populatedOrder.fulfilledAt = new Date();
+  }
+
   populatedOrder.status = 'paid';
-  populatedOrder.accessGrantedAt = populatedOrder.accessGrantedAt || new Date();
+  if (populatedOrder.itemType === 'course') {
+    populatedOrder.accessGrantedAt = populatedOrder.accessGrantedAt || new Date();
+  }
   await populatedOrder.save();
+
+  const cartLookup = {
+    user: populatedOrder.user._id,
+    itemType: populatedOrder.itemType || 'course',
+    status: 'active'
+  };
+  if (populatedOrder.itemType === 'product') {
+    cartLookup.product = populatedOrder.product?._id;
+  } else {
+    cartLookup.course = populatedOrder.course?._id;
+  }
+
+  await CartItem.updateMany(
+    cartLookup,
+    {
+      $set: {
+        status: 'converted',
+        order: populatedOrder._id,
+        convertedAt: new Date()
+      }
+    }
+  );
 
   return populatedOrder;
 };
@@ -127,6 +171,10 @@ export const checkoutCourse = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Terms must be accepted before payment');
   }
 
+  if (!mongoose.isValidObjectId(courseId)) {
+    throw new ApiError(400, 'Valid course id is required');
+  }
+
   const course = await Course.findById(courseId);
 
   if (!course || course.status !== 'published') {
@@ -158,7 +206,9 @@ export const checkoutCourse = asyncHandler(async (req, res) => {
 
   const order = await Order.create({
     user: req.user._id,
+    itemType: 'course',
     course: course._id,
+    quantity: 1,
     amount,
     currency: course.currency,
     provider: amount <= 0 ? 'mock' : selectedProvider,
@@ -191,6 +241,93 @@ export const checkoutCourse = asyncHandler(async (req, res) => {
     metadata: {
       userId: req.user._id.toString(),
       courseId: course._id.toString(),
+      orderId: order._id.toString()
+    }
+  });
+
+  order.provider = payment.provider;
+  order.status = payment.status;
+  order.paymentRef = payment.paymentRef;
+  await order.save();
+
+  res.status(201).json({
+    order,
+    payment,
+    verificationRequired: true,
+    mockVerificationAvailable: payment.provider === 'mock'
+  });
+});
+
+export const checkoutProduct = asyncHandler(async (req, res) => {
+  const { productId, provider = 'stripe', couponCode, termsAccepted, quantity = 1 } = req.body;
+
+  if (!termsAccepted) {
+    throw new ApiError(400, 'Terms must be accepted before payment');
+  }
+
+  if (!mongoose.isValidObjectId(productId)) {
+    throw new ApiError(400, 'Valid product id is required');
+  }
+
+  const product = await Product.findById(productId);
+  if (!product || product.status !== 'published') {
+    throw new ApiError(404, 'Product not found');
+  }
+
+  const safeQuantity = Math.max(1, Number(quantity || 1));
+  if (product.inventory?.track && product.inventory.quantity < safeQuantity) {
+    throw new ApiError(409, 'Product is out of stock');
+  }
+
+  const selectedProvider = ['stripe', 'paystack', 'mock'].includes(provider) ? provider : 'stripe';
+  const subtotal = product.price * safeQuantity;
+  const amount = applyCoupon(subtotal, couponCode);
+  const invoiceNumber = createInvoiceNumber();
+  const invoice = createInvoice({
+    invoiceNumber,
+    user: req.user,
+    itemName: product.title,
+    amount,
+    currency: product.currency
+  });
+
+  const order = await Order.create({
+    user: req.user._id,
+    itemType: 'product',
+    product: product._id,
+    quantity: safeQuantity,
+    amount,
+    currency: product.currency,
+    provider: amount <= 0 ? 'mock' : selectedProvider,
+    status: amount <= 0 ? 'verified' : 'pending',
+    paymentRef: amount <= 0 ? `free_product_${Date.now()}` : `pending_product_${Date.now()}`,
+    couponCode,
+    invoiceNumber,
+    invoice
+  });
+
+  if (amount <= 0) {
+    const paidOrder = await completeVerifiedOrder({
+      order,
+      rawPaymentEvent: { type: 'free_product' },
+      source: 'free_product'
+    });
+
+    return res.status(201).json({
+      order: paidOrder,
+      payment: { provider: 'mock', status: 'paid', verificationRequired: false }
+    });
+  }
+
+  const payment = await createPayment({
+    provider: selectedProvider,
+    amount,
+    currency: product.currency,
+    email: req.user.email,
+    description: `PlaneForge product: ${product.title}`,
+    metadata: {
+      userId: req.user._id.toString(),
+      productId: product._id.toString(),
       orderId: order._id.toString()
     }
   });
@@ -270,6 +407,7 @@ export const handlePaymentWebhook = asyncHandler(async (req, res) => {
 export const listMyOrders = asyncHandler(async (req, res) => {
   const orders = await Order.find({ user: req.user._id })
     .populate('course', 'title slug thumbnail instructorName')
+    .populate('product', 'title slug thumbnail sku')
     .sort({ createdAt: -1 });
 
   res.json({ orders });

@@ -6,7 +6,8 @@ import { useAuth } from '../context/AuthContext.jsx';
 const destinationFor = (from, role) => {
   if (typeof from === 'string') return from;
   if (from?.pathname) return `${from.pathname}${from.search || ''}`;
-  return `/dashboard/${role || 'student'}`;
+  const nextRole = ['student', 'learner', 'buyer'].includes(role) ? 'user' : role || 'user';
+  return `/dashboard/${nextRole}`;
 };
 
 export const Login = () => {
@@ -29,7 +30,7 @@ export const Login = () => {
 
     try {
       if (!challenge) {
-        const nextChallenge = await login({ ...form, role: 'learner' });
+        const nextChallenge = await login(form);
         setChallenge(nextChallenge);
         setCode('');
       } else {
@@ -50,8 +51,8 @@ export const Login = () => {
         <h1>{challenge ? 'Enter your email code' : 'Sign in to PlaneForge'}</h1>
         <p>
           {challenge
-            ? 'A short-lived code is required before this device can stream purchased lessons.'
-            : 'Sign in with your email and password, then verify the one-time code sent to you.'}
+            ? 'A short-lived code is required before this device can access purchased courses and products.'
+            : 'Sign in as a PlaneForge user to buy products, enroll in courses, and manage purchases.'}
         </p>
         <form onSubmit={submit}>
           {!challenge ? (

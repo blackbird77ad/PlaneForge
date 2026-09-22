@@ -5,6 +5,8 @@ import { User } from '../models/User.js';
 import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
+const accessRole = (role) => (['student', 'learner', 'buyer'].includes(role) ? 'user' : role);
+
 export const protect = asyncHandler(async (req, res, next) => {
   const header = req.headers.authorization;
   const token = header?.startsWith('Bearer ') ? header.split(' ')[1] : req.cookies?.token;
@@ -49,7 +51,8 @@ export const protect = asyncHandler(async (req, res, next) => {
 });
 
 export const allowRoles = (...roles) => (req, res, next) => {
-  if (!req.user || !roles.includes(req.user.role)) {
+  const allowedRoles = roles.map(accessRole);
+  if (!req.user || !allowedRoles.includes(accessRole(req.user.role))) {
     throw new ApiError(403, 'You do not have permission to access this resource');
   }
 

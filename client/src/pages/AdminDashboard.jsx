@@ -11,6 +11,7 @@ import {
   Layers3,
   LoaderCircle,
   MessageSquare,
+  Package,
   Pencil,
   Plus,
   RefreshCw,
@@ -29,9 +30,13 @@ import { articles as fallbackArticles, consultants, courses as fallbackCourses }
 import {
   archiveAdminArticle,
   archiveAdminCourse,
+  archiveAdminProduct,
   createAdminArticle,
   createAdminCourse,
+  createAdminProduct,
+  createAdminUser,
   createStreamUploadIntent,
+  getAdminActivity,
   getAdminConsultations,
   getAdminContent,
   getAdminInquiries,
@@ -45,6 +50,7 @@ import {
   updateAdminCourse,
   updateAdminInquiry,
   updateAdminPayment,
+  updateAdminProduct,
   updateAdminUser,
   upsertAdminSetting
 } from '../api/client.js';
@@ -66,12 +72,15 @@ const intentOptions = [
   'partnership',
   'general'
 ];
-const userRoles = ['student', 'consultant', 'partner', 'admin'];
+const userRoles = ['user', 'consultant', 'partner', 'admin'];
+const adminCreatedUserRoles = ['user', 'consultant', 'partner'];
 const userStatuses = ['active', 'suspended', 'pending'];
 const orderStatuses = ['pending', 'payment_initialized', 'verified', 'paid', 'failed', 'refunded'];
 const providers = ['stripe', 'paystack', 'mock'];
 const consultationStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
 const articleStatuses = ['draft', 'published'];
+const productStatusOptions = ['draft', 'published', 'archived'];
+const productTypeOptions = ['physical', 'digital'];
 
 const serverIdPattern = /^[a-f0-9]{24}$/i;
 
@@ -139,10 +148,43 @@ const initialArticleForm = () => ({
   body: ''
 });
 
+const initialProductForm = () => ({
+  id: '',
+  title: '',
+  description: '',
+  category: '',
+  sku: '',
+  productType: 'physical',
+  thumbnail: '',
+  imagesText: '',
+  price: '49',
+  currency: 'USD',
+  status: 'published',
+  inventoryTrack: false,
+  inventoryQuantity: '0',
+  isFeatured: false
+});
+
 const initialSettingForm = () => ({
   key: 'platform',
   description: '',
   valueText: '{\n  "newsletterEnabled": true\n}'
+});
+
+const initialUserForm = () => ({
+  name: '',
+  email: '',
+  contactNumber: '',
+  dateOfBirth: '',
+  password: '',
+  role: 'user',
+  status: 'active',
+  title: '',
+  organization: '',
+  specialty: '',
+  consultationFee: '',
+  partnerCode: '',
+  commissionRate: ''
 });
 
 const isServerRecord = (value) => serverIdPattern.test(String(value || ''));
@@ -179,12 +221,14 @@ const formatMoney = (amount = 0, currency = 'USD') => {
 
 const statusLabel = (value) => String(value || 'unknown').replaceAll('_', ' ');
 
+const roleLabel = (value) => (['student', 'learner', 'buyer', 'user'].includes(value) ? 'user' : statusLabel(value));
+
 const statusTone = (value) => {
-  if (['active', 'published', 'paid', 'confirmed', 'completed', 'responded', 'ready'].includes(value)) {
+  if (['active', 'published', 'paid', 'confirmed', 'completed', 'responded', 'ready', 'reviewed', 'resolved'].includes(value)) {
     return 'positive';
   }
 
-  if (['pending', 'payment_initialized', 'verified', 'in_review', 'processing', 'uploading', 'draft', 'new'].includes(value)) {
+  if (['pending', 'payment_initialized', 'verified', 'in_review', 'processing', 'uploading', 'draft', 'new', 'open'].includes(value)) {
     return 'attention';
   }
 
@@ -300,6 +344,41 @@ const coursePayload = (form) => ({
   }))
 });
 
+const productToForm = (product) => ({
+  id: product?._id || '',
+  title: product?.title || '',
+  description: product?.description || '',
+  category: product?.category || '',
+  sku: product?.sku || '',
+  productType: product?.productType || 'physical',
+  thumbnail: product?.thumbnail || '',
+  imagesText: listToText(product?.images),
+  price: String(product?.price ?? 49),
+  currency: product?.currency || 'USD',
+  status: product?.status || 'published',
+  inventoryTrack: Boolean(product?.inventory?.track),
+  inventoryQuantity: String(product?.inventory?.quantity ?? 0),
+  isFeatured: Boolean(product?.isFeatured)
+});
+
+const productPayload = (form) => ({
+  title: form.title.trim(),
+  description: form.description.trim(),
+  category: form.category.trim(),
+  sku: form.sku.trim(),
+  productType: form.productType,
+  thumbnail: form.thumbnail.trim(),
+  images: textToList(form.imagesText),
+  price: Number(form.price || 0),
+  currency: form.currency.trim().toUpperCase() || 'USD',
+  status: form.status,
+  inventory: {
+    track: Boolean(form.inventoryTrack),
+    quantity: Number(form.inventoryQuantity || 0)
+  },
+  isFeatured: Boolean(form.isFeatured)
+});
+
 const articleToForm = (article) => ({
   id: article?._id || '',
   title: article?.title || '',
@@ -321,20 +400,39 @@ const articlePayload = (form) => ({
   body: form.body.trim()
 });
 
+const userPayload = (form) => ({
+  name: form.name.trim(),
+  email: form.email.trim(),
+  contactNumber: form.contactNumber.trim(),
+  dateOfBirth: form.dateOfBirth,
+  password: form.password,
+  role: form.role,
+  status: form.status,
+  title: form.title.trim(),
+  specialty: form.role === 'consultant' ? form.specialty.trim() : '',
+  consultationFee: form.role === 'consultant' ? Number(form.consultationFee || 0) : 0,
+  partnerCode: form.role === 'partner' ? form.partnerCode.trim() : '',
+  commissionRate: form.role === 'partner' ? Number(form.commissionRate || 0) : 0,
+  profile: form.organization.trim() ? { organization: form.organization.trim() } : undefined
+});
+
 const replaceById = (items, nextItem) =>
   items.map((item) => (item._id === nextItem._id ? nextItem : item));
 
 export const AdminDashboard = () => {
   const [overview, setOverview] = useState(null);
-  const [content, setContent] = useState({ courses: fallbackCourses, articles: fallbackArticles });
+  const [activities, setActivities] = useState([]);
+  const [content, setContent] = useState({ courses: fallbackCourses, articles: fallbackArticles, products: [] });
   const [inquiries, setInquiries] = useState({ inquiries: [], grouped: { byIntent: [], byStatus: [], byTopic: [] } });
   const [users, setUsers] = useState({ users: [], pagination: null });
   const [payments, setPayments] = useState({ orders: [], pagination: null });
   const [consultations, setConsultations] = useState({ consultations: [], pagination: null });
   const [settings, setSettings] = useState([]);
   const [courseForm, setCourseForm] = useState(() => initialCourseForm());
+  const [productForm, setProductForm] = useState(() => initialProductForm());
   const [articleForm, setArticleForm] = useState(() => initialArticleForm());
   const [settingForm, setSettingForm] = useState(() => initialSettingForm());
+  const [userForm, setUserForm] = useState(() => initialUserForm());
   const [grants, setGrants] = useState({});
   const [filters, setFilters] = useState({
     inquiryStatus: 'open',
@@ -355,6 +453,7 @@ export const AdminDashboard = () => {
   const [busyAction, setBusyAction] = useState('');
 
   const courses = content.courses || [];
+  const products = content.products || [];
   const articles = content.articles || [];
   const serverCourses = courses.filter((course) => isServerRecord(course._id));
 
@@ -377,6 +476,7 @@ export const AdminDashboard = () => {
 
     const results = await Promise.allSettled([
       getAdminOverview(),
+      getAdminActivity({ limit: 80 }),
       getAdminContent(),
       getAdminInquiries({
         status: filters.inquiryStatus,
@@ -405,10 +505,20 @@ export const AdminDashboard = () => {
       getAdminSettings()
     ]);
 
-    const [overviewResult, contentResult, inquiryResult, userResult, paymentResult, consultationResult, settingResult] =
+    const [
+      overviewResult,
+      activityResult,
+      contentResult,
+      inquiryResult,
+      userResult,
+      paymentResult,
+      consultationResult,
+      settingResult
+    ] =
       results;
 
     if (overviewResult.status === 'fulfilled') setOverview(overviewResult.value);
+    if (activityResult.status === 'fulfilled') setActivities(activityResult.value.activities || []);
     if (contentResult.status === 'fulfilled') setContent(contentResult.value);
     if (inquiryResult.status === 'fulfilled') setInquiries(inquiryResult.value);
     if (userResult.status === 'fulfilled') setUsers(userResult.value);
@@ -440,6 +550,12 @@ export const AdminDashboard = () => {
       [key]: value
     }));
 
+  const updateUserForm = (key, value) =>
+    setUserForm((current) => ({
+      ...current,
+      [key]: value
+    }));
+
   const runAction = async (key, action, successText) => {
     setBusyAction(key);
     setNotice({ type: '', text: '' });
@@ -458,6 +574,12 @@ export const AdminDashboard = () => {
 
   const updateCourseField = (key, value) =>
     setCourseForm((current) => ({
+      ...current,
+      [key]: value
+    }));
+
+  const updateProductField = (key, value) =>
+    setProductForm((current) => ({
       ...current,
       [key]: value
     }));
@@ -553,6 +675,8 @@ export const AdminDashboard = () => {
 
   const resetCourseForm = () => setCourseForm(initialCourseForm());
 
+  const resetProductForm = () => setProductForm(initialProductForm());
+
   const submitCourse = async (event) => {
     event.preventDefault();
     const payload = coursePayload(courseForm);
@@ -575,6 +699,38 @@ export const AdminDashboard = () => {
       `course-archive-${course._id}`,
       () => archiveAdminCourse(course._id),
       'Course archived.'
+    );
+
+    if (data) await refresh({ quiet: true });
+  };
+
+  const editProduct = (product) => {
+    setProductForm(productToForm(product));
+    document.getElementById('product-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const submitProduct = async (event) => {
+    event.preventDefault();
+    const payload = productPayload(productForm);
+    const isEditing = isServerRecord(productForm.id);
+
+    const data = await runAction(
+      'product-save',
+      () => (isEditing ? updateAdminProduct(productForm.id, payload) : createAdminProduct(payload)),
+      isEditing ? 'Product updated.' : 'Product created.'
+    );
+
+    if (data?.product) {
+      setProductForm(productToForm(data.product));
+      await refresh({ quiet: true });
+    }
+  };
+
+  const archiveProduct = async (product) => {
+    const data = await runAction(
+      `product-archive-${product._id}`,
+      () => archiveAdminProduct(product._id),
+      'Product archived.'
     );
 
     if (data) await refresh({ quiet: true });
@@ -660,6 +816,26 @@ export const AdminDashboard = () => {
         ...current,
         users: replaceById(current.users || [], data.user)
       }));
+    }
+  };
+
+  const submitUser = async (event) => {
+    event.preventDefault();
+
+    if (userForm.password.length < 8) {
+      setNotice({ type: 'error', text: 'Use at least 8 characters for the account password.' });
+      return;
+    }
+
+    const data = await runAction(
+      'user-create',
+      () => createAdminUser(userPayload(userForm)),
+      'Account created.'
+    );
+
+    if (data?.user) {
+      setUserForm(initialUserForm());
+      await refresh({ quiet: true });
     }
   };
 
@@ -780,8 +956,12 @@ export const AdminDashboard = () => {
       detail: `${overview?.paidOrders ?? 0} paid orders`
     },
     {
-      label: 'Learners',
-      value: overview?.students ?? users.users?.filter((user) => user.role === 'student').length ?? 0,
+      label: 'Users',
+      value:
+        overview?.users ??
+        overview?.students ??
+        users.users?.filter((user) => ['user', 'student', 'learner', 'buyer'].includes(user.role)).length ??
+        0,
       detail: `${overview?.activeEnrollments ?? 0} active enrollments`
     },
     {
@@ -790,9 +970,19 @@ export const AdminDashboard = () => {
       detail: `${overview?.draftCourses ?? courses.filter((course) => course.status === 'draft').length} drafts`
     },
     {
+      label: 'Products',
+      value: overview?.products ?? products.filter((product) => product.status === 'published').length,
+      detail: `${overview?.draftProducts ?? products.filter((product) => product.status === 'draft').length} drafts`
+    },
+    {
       label: 'Open Inquiries',
       value: overview?.inquiries ?? inquiries.inquiries?.length ?? 0,
       detail: `${overview?.pendingOrders ?? 0} orders need attention`
+    },
+    {
+      label: 'Active Carts',
+      value: overview?.activeCartItems ?? 0,
+      detail: `${overview?.cartItems ?? 0} tracked cart events`
     },
     {
       label: 'Consultants',
@@ -842,6 +1032,35 @@ export const AdminDashboard = () => {
             <MetricCard key={metric.label} {...metric} />
           ))}
         </div>
+
+        <section className="dashboard-section admin-section" id="activity">
+          <header className="admin-section-header">
+            <div>
+              <h2>
+                <BarChart3 size={20} /> Site activity
+              </h2>
+              <span>{activities.length} latest events</span>
+            </div>
+          </header>
+          <div className="admin-activity-list">
+            {activities.map((activity) => (
+              <article key={activity.id}>
+                <div>
+                  <strong>{activity.label}</strong>
+                  <small>{activity.detail}</small>
+                </div>
+                <div>
+                  <span>{activity.actorName || 'Unknown'}</span>
+                  <small>{activity.actorEmail || 'No email'}</small>
+                </div>
+                <em className={`admin-pill ${statusTone(activity.status)}`}>{statusLabel(activity.status)}</em>
+                <span>{activity.amount ? formatMoney(activity.amount, activity.currency) : statusLabel(activity.type)}</span>
+                <small>{formatDate(activity.createdAt)}</small>
+              </article>
+            ))}
+            {activities.length === 0 && <p className="admin-empty">No tracked activity yet.</p>}
+          </div>
+        </section>
 
         <section className="dashboard-section admin-section" id="inquiries">
           <header className="admin-section-header">
@@ -1319,6 +1538,168 @@ export const AdminDashboard = () => {
           </div>
         </section>
 
+        <section className="dashboard-section admin-section" id="products">
+          <header className="admin-section-header">
+            <div>
+              <h2>
+                <Package size={20} /> Products
+              </h2>
+              <span>{products.length} products</span>
+            </div>
+            <button className="button ghost small" type="button" onClick={resetProductForm}>
+              <Plus size={17} />
+              New product
+            </button>
+          </header>
+
+          <div className="admin-split">
+            <form className="profile-form admin-editor" id="product-form" onSubmit={submitProduct}>
+              <div className="admin-editor-heading">
+                <div>
+                  <strong>{isServerRecord(productForm.id) ? 'Edit product' : 'Create product'}</strong>
+                  <span>{productForm.status}</span>
+                </div>
+                <button className="button primary small" type="submit" disabled={busyAction === 'product-save'}>
+                  {busyAction === 'product-save' ? <LoaderCircle className="spin" size={17} /> : <Save size={17} />}
+                  Save
+                </button>
+              </div>
+
+              <div className="admin-form-grid">
+                <label>
+                  Title
+                  <input value={productForm.title} onChange={(event) => updateProductField('title', event.target.value)} required />
+                </label>
+                <label>
+                  SKU
+                  <input value={productForm.sku} onChange={(event) => updateProductField('sku', event.target.value)} />
+                </label>
+                <label className="admin-wide">
+                  Description
+                  <textarea
+                    value={productForm.description}
+                    onChange={(event) => updateProductField('description', event.target.value)}
+                    required
+                  />
+                </label>
+                <label>
+                  Category
+                  <input value={productForm.category} onChange={(event) => updateProductField('category', event.target.value)} required />
+                </label>
+                <label>
+                  Type
+                  <select value={productForm.productType} onChange={(event) => updateProductField('productType', event.target.value)}>
+                    {productTypeOptions.map((type) => (
+                      <option value={type} key={type}>
+                        {statusLabel(type)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Price
+                  <input
+                    value={productForm.price}
+                    onChange={(event) => updateProductField('price', event.target.value)}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                  />
+                </label>
+                <label>
+                  Currency
+                  <input
+                    value={productForm.currency}
+                    onChange={(event) => updateProductField('currency', event.target.value.toUpperCase())}
+                    maxLength={3}
+                  />
+                </label>
+                <label>
+                  Status
+                  <select value={productForm.status} onChange={(event) => updateProductField('status', event.target.value)}>
+                    {productStatusOptions.map((status) => (
+                      <option value={status} key={status}>
+                        {statusLabel(status)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Inventory quantity
+                  <input
+                    value={productForm.inventoryQuantity}
+                    onChange={(event) => updateProductField('inventoryQuantity', event.target.value)}
+                    type="number"
+                    min="0"
+                  />
+                </label>
+                <label className="admin-wide">
+                  Thumbnail URL
+                  <input value={productForm.thumbnail} onChange={(event) => updateProductField('thumbnail', event.target.value)} />
+                </label>
+                <label className="admin-wide">
+                  Image URLs
+                  <textarea value={productForm.imagesText} onChange={(event) => updateProductField('imagesText', event.target.value)} />
+                </label>
+              </div>
+
+              <div className="admin-toggle-row">
+                <label className="admin-check">
+                  <input
+                    type="checkbox"
+                    checked={productForm.inventoryTrack}
+                    onChange={(event) => updateProductField('inventoryTrack', event.target.checked)}
+                  />
+                  <span>Track inventory</span>
+                </label>
+                <label className="admin-check">
+                  <input
+                    type="checkbox"
+                    checked={productForm.isFeatured}
+                    onChange={(event) => updateProductField('isFeatured', event.target.checked)}
+                  />
+                  <span>Featured</span>
+                </label>
+              </div>
+            </form>
+
+            <aside className="admin-course-panel">
+              <div className="admin-panel-heading">
+                <strong>Product catalogue</strong>
+                <span>{products.length} records</span>
+              </div>
+              <div className="admin-compact-list">
+                {products.map((product) => (
+                  <article key={product._id || product.slug}>
+                    <div>
+                      <strong>{product.title}</strong>
+                      <span>
+                        {product.category} / {formatMoney(product.price, product.currency)}
+                      </span>
+                    </div>
+                    <em className={`admin-pill ${statusTone(product.status || 'draft')}`}>{statusLabel(product.status || 'draft')}</em>
+                    <div className="admin-icon-actions">
+                      <button className="icon-button" type="button" title="Edit product" onClick={() => editProduct(product)}>
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        className="icon-button"
+                        type="button"
+                        title="Archive product"
+                        onClick={() => archiveProduct(product)}
+                        disabled={!isServerRecord(product._id) || busyAction === `product-archive-${product._id}`}
+                      >
+                        <Archive size={16} />
+                      </button>
+                    </div>
+                  </article>
+                ))}
+                {products.length === 0 && <p className="admin-empty">No products yet.</p>}
+              </div>
+            </aside>
+          </div>
+        </section>
+
         <section className="dashboard-section admin-section" id="articles">
           <header className="admin-section-header">
             <div>
@@ -1438,7 +1819,7 @@ export const AdminDashboard = () => {
                 <option value="">All roles</option>
                 {userRoles.map((role) => (
                   <option value={role} key={role}>
-                    {statusLabel(role)}
+                    {roleLabel(role)}
                   </option>
                 ))}
               </select>
@@ -1456,6 +1837,139 @@ export const AdminDashboard = () => {
             </form>
           </header>
 
+          <form className="admin-editor admin-user-create" onSubmit={submitUser}>
+            <div className="admin-editor-heading">
+              <div>
+                <h3>
+                  <UserCog size={18} /> Add account
+                </h3>
+                <span>Create user, consultant, or partner access without exposing staff roles on public login.</span>
+              </div>
+            </div>
+            <div className="admin-form-grid">
+              <label>
+                Name
+                <input value={userForm.name} onChange={(event) => updateUserForm('name', event.target.value)} required />
+              </label>
+              <label>
+                Email
+                <input
+                  value={userForm.email}
+                  onChange={(event) => updateUserForm('email', event.target.value)}
+                  type="email"
+                  required
+                />
+              </label>
+              <label>
+                Contact number
+                <input
+                  value={userForm.contactNumber}
+                  onChange={(event) => updateUserForm('contactNumber', event.target.value)}
+                  type="tel"
+                  required
+                />
+              </label>
+              <label>
+                Date of birth
+                <input
+                  value={userForm.dateOfBirth}
+                  onChange={(event) => updateUserForm('dateOfBirth', event.target.value)}
+                  type="date"
+                  max={new Date().toISOString().slice(0, 10)}
+                  required
+                />
+              </label>
+              <label>
+                Password
+                <input
+                  value={userForm.password}
+                  onChange={(event) => updateUserForm('password', event.target.value)}
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                />
+              </label>
+              <label>
+                Role
+                <select value={userForm.role} onChange={(event) => updateUserForm('role', event.target.value)}>
+                  {adminCreatedUserRoles.map((role) => (
+                    <option value={role} key={role}>
+                      {roleLabel(role)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Status
+                <select value={userForm.status} onChange={(event) => updateUserForm('status', event.target.value)}>
+                  {userStatuses.map((status) => (
+                    <option value={status} key={status}>
+                      {statusLabel(status)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Title
+                <input value={userForm.title} onChange={(event) => updateUserForm('title', event.target.value)} />
+              </label>
+              <label className="admin-wide">
+                Organization
+                <input
+                  value={userForm.organization}
+                  onChange={(event) => updateUserForm('organization', event.target.value)}
+                />
+              </label>
+              {userForm.role === 'consultant' && (
+                <>
+                  <label>
+                    Specialty
+                    <input
+                      value={userForm.specialty}
+                      onChange={(event) => updateUserForm('specialty', event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Consultation fee
+                    <input
+                      value={userForm.consultationFee}
+                      onChange={(event) => updateUserForm('consultationFee', event.target.value)}
+                      type="number"
+                      min="0"
+                      step="1"
+                    />
+                  </label>
+                </>
+              )}
+              {userForm.role === 'partner' && (
+                <>
+                  <label>
+                    Partner code
+                    <input
+                      value={userForm.partnerCode}
+                      onChange={(event) => updateUserForm('partnerCode', event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Commission %
+                    <input
+                      value={userForm.commissionRate}
+                      onChange={(event) => updateUserForm('commissionRate', event.target.value)}
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.1"
+                    />
+                  </label>
+                </>
+              )}
+            </div>
+            <button className="button primary small" type="submit" disabled={busyAction === 'user-create'}>
+              <Plus size={16} />
+              {busyAction === 'user-create' ? 'Creating' : 'Add Account'}
+            </button>
+          </form>
+
           <div className="admin-table users-table">
             <div className="admin-table-row admin-table-head">
               <span>Account</span>
@@ -1472,12 +1986,22 @@ export const AdminDashboard = () => {
                   <span>
                     <strong>{user.name}</strong>
                     <small>{user.email}</small>
+                    {user.contactNumber && <small>{user.contactNumber}</small>}
+                    {user.role === 'partner' && (
+                      <small>
+                        {user.partnerCode || 'No partner code'} / {Number(user.commissionRate || 0)}% commission
+                      </small>
+                    )}
+                    {user.role === 'consultant' && user.specialty && <small>{user.specialty}</small>}
                   </span>
                   <span>
-                    <select value={user.role} onChange={(event) => updateUser(user, { role: event.target.value })}>
+                    <select
+                      value={['student', 'learner', 'buyer'].includes(user.role) ? 'user' : user.role}
+                      onChange={(event) => updateUser(user, { role: event.target.value })}
+                    >
                       {userRoles.map((role) => (
                         <option value={role} key={role}>
-                          {statusLabel(role)}
+                          {roleLabel(role)}
                         </option>
                       ))}
                     </select>
@@ -1567,7 +2091,7 @@ export const AdminDashboard = () => {
             <div className="admin-table-row admin-table-head">
               <span>Invoice</span>
               <span>Customer</span>
-              <span>Course</span>
+              <span>Item</span>
               <span>Amount</span>
               <span>Status</span>
             </div>
@@ -1581,7 +2105,7 @@ export const AdminDashboard = () => {
                   <strong>{order.user?.name || 'Unknown'}</strong>
                   <small>{order.user?.email || order.invoice?.customerEmail || 'No email'}</small>
                 </span>
-                <span>{order.course?.title || order.invoice?.itemName || 'Unknown course'}</span>
+                <span>{order.course?.title || order.product?.title || order.invoice?.itemName || 'Unknown item'}</span>
                 <span>{formatMoney(order.amount, order.currency)}</span>
                 <span>
                   <select value={order.status} onChange={(event) => updatePayment(order, event.target.value)}>
@@ -1632,7 +2156,7 @@ export const AdminDashboard = () => {
           <div className="admin-table consultations-table">
             <div className="admin-table-row admin-table-head">
               <span>Service</span>
-              <span>Student</span>
+              <span>Learner</span>
               <span>Consultant</span>
               <span>Schedule</span>
               <span>Status</span>

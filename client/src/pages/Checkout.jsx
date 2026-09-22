@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { courses as fallbackCourses } from '../data/catalog.js';
 
 const money = (value, currency = 'USD') =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(value);
+  new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(Number(value || 0));
 
 export const Checkout = () => {
   const { slug } = useParams();
@@ -36,7 +36,8 @@ export const Checkout = () => {
     return <main className="section page">Loading checkout...</main>;
   }
 
-  const price = couponCode.toUpperCase() === 'FORGE10' ? course.price * 0.9 : course.price;
+  const basePrice = Number(course.price || 0);
+  const price = couponCode.toUpperCase() === 'FORGE10' ? basePrice * 0.9 : basePrice;
 
   const submit = async (event) => {
     event.preventDefault();

@@ -7,10 +7,30 @@ const orderSchema = new mongoose.Schema(
       ref: 'User',
       required: true
     },
+    itemType: {
+      type: String,
+      enum: ['course', 'product'],
+      default: 'course',
+      index: true
+    },
     course: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Course',
-      required: true
+      required() {
+        return this.itemType === 'course';
+      }
+    },
+    product: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Product',
+      required() {
+        return this.itemType === 'product';
+      }
+    },
+    quantity: {
+      type: Number,
+      default: 1,
+      min: 1
     },
     amount: {
       type: Number,
@@ -36,6 +56,7 @@ const orderSchema = new mongoose.Schema(
     },
     couponCode: String,
     accessGrantedAt: Date,
+    fulfilledAt: Date,
     verifiedAt: Date,
     rawPaymentEvent: mongoose.Schema.Types.Mixed,
     invoiceNumber: {

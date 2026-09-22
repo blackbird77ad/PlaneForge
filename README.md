@@ -31,9 +31,21 @@ PlaneForge is a MERN learning management and engineering consultation platform. 
    copy .env.example .env
    ```
 
-3. Start MongoDB locally or point `MONGO_URI` at your hosted MongoDB database.
+3. Choose a backend mode:
 
-4. Seed demo data:
+   ```bash
+   DEMO_BACKEND=true
+   ```
+
+   Demo backend mode serves seeded in-memory data and does not require MongoDB. Use this for quick local admin and login testing.
+
+   ```bash
+   DEMO_BACKEND=false
+   ```
+
+   Database backend mode requires MongoDB locally or a hosted `MONGO_URI`.
+
+4. Seed demo data when using the Mongo-backed database mode:
 
    ```bash
    npm run seed
@@ -46,6 +58,21 @@ PlaneForge is a MERN learning management and engineering consultation platform. 
    ```
 
    The React dev server starts at `http://localhost:7310/`. If that port is already in use, Vite will print the next available local URL.
+
+## Test Logins
+
+The local demo backend and seeded Mongo data both use `Password123!`.
+
+| Area | Email | Access |
+| --- | --- | --- |
+| Admin | `admin@planeforge.test` | `/admin` |
+| Learner | `student@planeforge.test` | `/login` |
+| Consultant | `consultant@planeforge.test` | `/consultant` |
+| Partner | `partner@planeforge.test` | Admin-created account, then `/login` |
+
+The public `/login` form does not ask visitors to choose a role. After the one-time code is verified, the account role sends the user to the correct dashboard. In local development, when `RESEND_API_KEY` is empty, the one-time login code is returned in the API response and shown by the UI as a development code. If the browser-only demo fallback is used because the API is unavailable, the verification code is `123456`.
+
+Local admin sign-up uses `ADMIN_SETUP_CODE`; the default local value is `PLANEFORGE-ADMIN-2026`.
 
 ## Useful Commands
 

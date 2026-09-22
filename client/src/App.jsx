@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { PublicLayout } from './layouts/PublicLayout.jsx';
 import { ProtectedRoute } from './components/ProtectedRoute.jsx';
@@ -8,6 +8,7 @@ import { About } from './pages/About.jsx';
 import { Blog } from './pages/Blog.jsx';
 import { Checkout } from './pages/Checkout.jsx';
 import { CheckoutComplete } from './pages/CheckoutComplete.jsx';
+import { ConsultantAccess } from './pages/ConsultantAccess.jsx';
 import { Consultations } from './pages/Consultations.jsx';
 import { Contact } from './pages/Contact.jsx';
 import { CourseDetails } from './pages/CourseDetails.jsx';
@@ -17,7 +18,11 @@ import { LearningPlayer } from './pages/LearningPlayer.jsx';
 import { Login } from './pages/Login.jsx';
 import { NotFound } from './pages/NotFound.jsx';
 import { PartnerDashboard } from './pages/PartnerDashboard.jsx';
+import { PartnerAccess } from './pages/PartnerAccess.jsx';
 import { Profile } from './pages/Profile.jsx';
+import { ProductCheckout } from './pages/ProductCheckout.jsx';
+import { ProductDetails } from './pages/ProductDetails.jsx';
+import { Products } from './pages/Products.jsx';
 import { Register } from './pages/Register.jsx';
 import { ResetPassword } from './pages/ResetPassword.jsx';
 import { Search } from './pages/Search.jsx';
@@ -35,13 +40,20 @@ import { useAuth } from './context/AuthContext.jsx';
 
 const DashboardRedirect = () => {
   const { user } = useAuth();
-  return <Navigate to={`/dashboard/${user?.role || 'student'}`} replace />;
+  const role = ['student', 'learner', 'buyer'].includes(user?.role) ? 'user' : user?.role || 'user';
+  return <Navigate to={`/dashboard/${role}`} replace />;
 };
 
 const ScrollToTop = () => {
-  const { pathname, hash } = useLocation();
+  const { pathname, search, hash } = useLocation();
 
   useEffect(() => {
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+  }, []);
+
+  useLayoutEffect(() => {
     if (hash) {
       window.setTimeout(() => {
         document.getElementById(hash.slice(1))?.scrollIntoView({ block: 'start' });
@@ -49,8 +61,13 @@ const ScrollToTop = () => {
       return;
     }
 
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-  }, [pathname, hash]);
+    const previousScrollBehavior = document.documentElement.style.scrollBehavior;
+    document.documentElement.style.scrollBehavior = 'auto';
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    window.scrollTo(0, 0);
+    document.documentElement.style.scrollBehavior = previousScrollBehavior;
+  }, [pathname, search, hash]);
 
   return null;
 };
@@ -63,11 +80,15 @@ const App = () => (
         <Route path="/" element={<Home />} />
         <Route path="/courses" element={<Courses />} />
         <Route path="/courses/:slug" element={<CourseDetails />} />
+        <Route path="/products" element={<Products />} />
+        <Route path="/products/:slug" element={<ProductDetails />} />
         <Route path="/consultations" element={<Consultations />} />
         <Route path="/blog" element={<Blog />} />
         <Route path="/about" element={<About />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/admin" element={<AdminAccess />} />
+        <Route path="/consultant" element={<ConsultantAccess />} />
+        <Route path="/partner" element={<PartnerAccess />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/signup" element={<Register />} />
@@ -76,9 +97,17 @@ const App = () => (
         <Route path="/search" element={<Search />} />
         <Route path="/checkout/complete" element={<CheckoutComplete />} />
         <Route
+          path="/checkout/product/:slug"
+          element={
+            <ProtectedRoute roles={['user', 'admin']}>
+              <ProductCheckout />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/checkout/:slug"
           element={
-            <ProtectedRoute roles={['student', 'admin']}>
+            <ProtectedRoute roles={['user', 'admin']}>
               <Checkout />
             </ProtectedRoute>
           }
@@ -86,7 +115,7 @@ const App = () => (
         <Route
           path="/learn/:slug"
           element={
-            <ProtectedRoute roles={['student', 'admin']}>
+            <ProtectedRoute roles={['user', 'admin']}>
               <LearningPlayer />
             </ProtectedRoute>
           }
@@ -108,13 +137,14 @@ const App = () => (
           }
         />
         <Route
-          path="/dashboard/student"
+          path="/dashboard/user"
           element={
-            <ProtectedRoute roles={['student', 'admin']}>
+            <ProtectedRoute roles={['user', 'admin']}>
               <StudentDashboard />
             </ProtectedRoute>
           }
         />
+        <Route path="/dashboard/student" element={<Navigate to="/dashboard/user" replace />} />
         <Route
           path="/dashboard/admin"
           element={

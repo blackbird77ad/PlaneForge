@@ -16,15 +16,30 @@ import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 const publicUser = (user) => ({
+  _id: user._id,
   id: user._id,
   name: user.name,
   email: user.email,
-  role: user.role,
+  contactNumber: user.contactNumber,
+  dateOfBirth: user.dateOfBirth,
+  role: accountRole(user.role),
+  status: user.status,
   avatar: user.avatar,
   title: user.title,
   specialty: user.specialty,
+  bio: user.bio,
+  qualifications: user.qualifications || [],
+  experienceYears: user.experienceYears || 0,
+  consultationFee: user.consultationFee || 0,
+  languages: user.languages || ['English'],
+  availability: user.availability || [],
+  partnerCode: user.partnerCode,
+  commissionRate: user.commissionRate || 0,
   ownedCourses: user.ownedCourses || [],
-  profile: user.profile
+  profile: user.profile || {},
+  createdAt: user.createdAt,
+  updatedAt: user.updatedAt,
+  lastLoginAt: user.lastLoginAt
 });
 
 const generateLoginCode = () => crypto.randomInt(100000, 1000000).toString();
@@ -38,14 +53,50 @@ const resetCodeExpiry = () =>
 const exposeDevCode = () => !env.resendApiKey && process.env.NODE_ENV !== 'production';
 
 const normalizeRequestedRole = (role) => {
-  if (!role || role === 'learner') return 'student';
+  if (!role || ['learner', 'student', 'buyer'].includes(role)) return 'user';
   return role;
+};
+
+const accountRole = (role) => (['student', 'learner', 'buyer'].includes(role) ? 'user' : role);
+
+const compactString = (value, maxLength = 240) => {
+  if (value == null) return '';
+  return String(value).trim().slice(0, maxLength);
+};
+
+const normalizeContactNumber = (value) => compactString(value, 80);
+
+const parseDateOfBirth = (value) => {
+  const rawDate = compactString(value, 40);
+  if (!rawDate) {
+    throw new ApiError(400, 'Date of birth is required');
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+    throw new ApiError(400, 'Use a valid date of birth');
+  }
+
+  const [year, month, day] = rawDate.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    throw new ApiError(400, 'Use a valid date of birth');
+  }
+
+  if (date > new Date()) {
+    throw new ApiError(400, 'Date of birth cannot be in the future');
+  }
+
+  return date;
 };
 
 const assertRegistrationRole = ({ role, adminSetupCode }) => {
   const normalizedRole = normalizeRequestedRole(role);
-  if (!['student', 'admin'].includes(normalizedRole)) {
-    throw new ApiError(400, 'Registration is available for learners and administrators');
+  if (!['user', 'consultant', 'partner', 'admin'].includes(normalizedRole)) {
+    throw new ApiError(400, 'Registration is available for users, consultants, partners, and administrators');
   }
 
   if (normalizedRole === 'admin') {
@@ -63,7 +114,7 @@ const assertRegistrationRole = ({ role, adminSetupCode }) => {
 
 const assertExpectedRole = ({ user, role }) => {
   const expectedRole = normalizeRequestedRole(role);
-  if (!role || user.role === expectedRole) return;
+  if (accountRole(user.role) === expectedRole) return;
 
   throw new ApiError(401, `This account is not registered as ${expectedRole}`);
 };
@@ -104,11 +155,14 @@ const createLoginChallenge = async ({ user, req, deviceId }) => {
 };
 
 export const register = asyncHandler(async (req, res) => {
-  const { name, email, password, role = 'student', adminSetupCode } = req.body;
+  const { name, email, password, role = 'user', adminSetupCode, contactNumber, dateOfBirth } = req.body;
   const deviceId = getDeviceId(req);
+  const normalizedName = compactString(name, 120);
+  const normalizedEmail = compactString(email, 254).toLowerCase();
+  const normalizedContactNumber = normalizeContactNumber(contactNumber);
 
-  if (!name || !email || !password) {
-    throw new ApiError(400, 'Name, email and password are required');
+  if (!normalizedName || !normalizedEmail || !password || !normalizedContactNumber) {
+    throw new ApiError(400, 'Name, email, contact number and password are required');
   }
 
   if (password.length < 8) {
@@ -120,18 +174,31 @@ export const register = asyncHandler(async (req, res) => {
   }
 
   const normalizedRole = assertRegistrationRole({ role, adminSetupCode });
-  const existing = await User.findOne({ email });
+  const parsedDateOfBirth = parseDateOfBirth(dateOfBirth);
+  const existing = await User.findOne({ email: normalizedEmail });
 
   if (existing) {
     throw new ApiError(409, 'An account with this email already exists');
   }
 
   const user = await User.create({
-    name,
-    email,
+    name: normalizedName,
+    email: normalizedEmail,
+    contactNumber: normalizedContactNumber,
+    dateOfBirth: parsedDateOfBirth,
     role: normalizedRole,
+    status: ['consultant', 'partner'].includes(normalizedRole) ? 'pending' : 'active',
     passwordHash: await User.hashPassword(password)
   });
+
+  if (user.status === 'pending') {
+    return res.status(202).json({
+      message: 'Account request received. An admin must approve this account before sign in.',
+      requiresApproval: true,
+      role: user.role,
+      status: user.status
+    });
+  }
 
   const challenge = await createLoginChallenge({ user, req, deviceId });
 
@@ -157,6 +224,10 @@ export const login = asyncHandler(async (req, res) => {
 
   if (!user || !(await user.comparePassword(password))) {
     throw new ApiError(401, 'Invalid email or password');
+  }
+
+  if (user.status === 'pending') {
+    throw new ApiError(401, 'Account is pending admin approval');
   }
 
   if (user.status !== 'active') {

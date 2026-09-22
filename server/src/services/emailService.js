@@ -27,7 +27,7 @@ export const sendEnrollmentEmail = ({ user, course, invoiceNumber }) =>
       <h1>Welcome to ${course.title}</h1>
       <p>Hello ${user.name}, your PlaneForge course is now unlocked.</p>
       <p>Invoice: <strong>${invoiceNumber}</strong></p>
-      <p>You can continue from your student dashboard.</p>
+      <p>You can continue from your account dashboard.</p>
     `
   });
 

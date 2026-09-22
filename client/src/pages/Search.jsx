@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ArrowRight, BookOpen, FileText, Search as SearchIcon } from 'lucide-react';
-import { getCourses, getLocalCourseResults } from '../api/client.js';
+import { ArrowRight, BookOpen, FileText, PackageSearch, Search as SearchIcon } from 'lucide-react';
+import { getCourses, getLocalCourseResults, getLocalProductResults, getProducts } from '../api/client.js';
 import { CourseCard } from '../components/CourseCard.jsx';
-import { articles, courses as fallbackCourses } from '../data/catalog.js';
+import { ProductCard } from '../components/ProductCard.jsx';
+import { articles, courses as fallbackCourses, products as fallbackProducts } from '../data/catalog.js';
 
 const searchArticles = (query) => {
   const normalized = query.trim().toLowerCase();
@@ -22,7 +23,9 @@ export const Search = () => {
   const query = searchParams.get('q') || '';
   const [term, setTerm] = useState(query);
   const [courseResults, setCourseResults] = useState(fallbackCourses.slice(0, 6));
+  const [productResults, setProductResults] = useState(fallbackProducts.slice(0, 3));
   const [loading, setLoading] = useState(false);
+  const [productsLoading, setProductsLoading] = useState(false);
 
   useEffect(() => {
     setTerm(query);
@@ -39,6 +42,24 @@ export const Search = () => {
       })
       .finally(() => {
         if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [query]);
+
+  useEffect(() => {
+    let active = true;
+    const localData = getLocalProductResults({ search: query, limit: query ? 6 : 3, sort: 'newest' });
+    setProductResults(localData.products || []);
+    setProductsLoading(true);
+    getProducts({ search: query, limit: query ? 6 : 3, sort: 'newest' })
+      .then((data) => {
+        if (active) setProductResults(data.products || []);
+      })
+      .finally(() => {
+        if (active) setProductsLoading(false);
       });
 
     return () => {
@@ -80,6 +101,41 @@ export const Search = () => {
             </button>
           </form>
         </div>
+      </section>
+
+      <section className="section public-section">
+        <div className="section-title-row">
+          <div>
+            <p className="eyebrow">{query ? 'Product Results' : 'Featured Products'}</p>
+            <h2>{query ? `Products matching "${query}"` : 'Hardware products and PCB build resources'}</h2>
+          </div>
+          <Link className="button ghost small" to={query ? `/products?search=${encodeURIComponent(query)}` : '/products'}>
+            Open Products
+            <ArrowRight size={16} />
+          </Link>
+        </div>
+
+        {productsLoading && !productResults.length ? (
+          <div className="empty-state compact">
+            <PackageSearch size={28} />
+            <h2>Searching products</h2>
+          </div>
+        ) : productResults.length ? (
+          <div className="course-grid product-grid">
+            {productResults.map((product) => (
+              <ProductCard key={product.slug || product._id} product={product} />
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state">
+            <PackageSearch size={28} />
+            <h2>No product matches yet</h2>
+            <p>Ask PlaneForge to build a similar product for your project.</p>
+            <Link className="button primary" to="/products">
+              Browse Products
+            </Link>
+          </div>
+        )}
       </section>
 
       <section className="section public-section">

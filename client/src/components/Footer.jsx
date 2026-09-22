@@ -46,10 +46,12 @@ export const Footer = () => (
 
       <section>
         <h3>Products</h3>
+        <Link to="/products">Hardware Products</Link>
         <Link to="/courses">PCB Courses</Link>
+        <Link to="/products?type=digital">Digital Tools</Link>
         <Link to="/consultations">Consulting</Link>
         <Link to="/search">Search</Link>
-        <Link to="/signup">Learner Account</Link>
+        <Link to="/signup">User Account</Link>
       </section>
 
       <section>

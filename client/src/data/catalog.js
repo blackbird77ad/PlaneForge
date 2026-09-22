@@ -321,6 +321,84 @@ export const courses = courseBlueprints.flatMap((group) =>
   })
 );
 
+const productBlueprints = [
+  {
+    title: 'PCB Review Checklist Pack',
+    description:
+      'Downloadable review templates for schematic checks, layout checks, BOM readiness, DFM notes, and fabrication release.',
+    category: 'Templates',
+    sku: 'PF-DIG-PCB-CHECKLIST',
+    productType: 'digital',
+    thumbnail: images.schematic,
+    images: [images.schematic, images.engineeringDesk],
+    price: 39,
+    currency: 'USD',
+    inventory: { track: false, quantity: 0 },
+    status: 'published',
+    isFeatured: true,
+    soldCount: 18
+  },
+  {
+    title: 'Hardware Bring-Up Lab Kit',
+    description:
+      'A starter bench kit for PCB bring-up practice with labeled jumpers, test leads, check sheets, and first-power workflow notes.',
+    category: 'Lab Kits',
+    sku: 'PF-KIT-BRINGUP-01',
+    productType: 'physical',
+    thumbnail: images.pcbBench,
+    images: [images.pcbBench, images.lab],
+    price: 149,
+    currency: 'USD',
+    inventory: { track: true, quantity: 24 },
+    status: 'published',
+    isFeatured: true,
+    soldCount: 6
+  },
+  {
+    title: 'STM32 Sensor Node Prototype Board',
+    description:
+      'A compact PlaneForge prototype board for practicing sensor IO, power planning, programming headers, and board-level validation.',
+    category: 'Prototype Boards',
+    sku: 'PF-BOARD-STM32-SENSOR',
+    productType: 'physical',
+    thumbnail: images.electronicsBench,
+    images: [images.electronicsBench, images.product],
+    price: 89,
+    currency: 'USD',
+    inventory: { track: true, quantity: 12 },
+    status: 'published',
+    isFeatured: false,
+    soldCount: 9
+  },
+  {
+    title: 'Custom PCB Build Discovery Call',
+    description:
+      'A paid productized intake for teams that want PlaneForge to scope a similar board, kit, or hardware learning product.',
+    category: 'Custom Builds',
+    sku: 'PF-CUSTOM-DISCOVERY',
+    productType: 'digital',
+    thumbnail: images.manufacturing,
+    images: [images.manufacturing, images.lab],
+    price: 120,
+    currency: 'USD',
+    inventory: { track: false, quantity: 0 },
+    status: 'published',
+    isFeatured: false,
+    soldCount: 4
+  }
+];
+
+export const products = productBlueprints.map((product) => {
+  const slug = slugify(product.title);
+
+  return {
+    id: `product-${slug}`,
+    _id: `product-${slug}`,
+    slug,
+    ...product
+  };
+});
+
 export const consultants = [
   {
     id: 'consultant-planeforge',

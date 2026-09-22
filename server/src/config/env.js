@@ -1,10 +1,19 @@
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
+const configDir = path.dirname(fileURLToPath(import.meta.url));
+const projectRootEnv = path.resolve(configDir, '../../..', '.env');
+
+dotenv.config({ path: projectRootEnv });
 dotenv.config();
 
 export const env = {
   port: process.env.PORT || 5000,
-  mongoUri: process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/planeforge',
+  demoBackend: process.env.DEMO_BACKEND === 'true',
+  mongoUri: process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/planeforge',
+  mongoServerSelectionTimeoutMs: Number(process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS || 5000),
+  mongoReconnectIntervalMs: Number(process.env.MONGO_RECONNECT_INTERVAL_MS || 30000),
   jwtSecret: process.env.JWT_SECRET || 'replace-this-development-secret',
   clientUrl: process.env.CLIENT_URL || 'http://localhost:7310',
   auth: {

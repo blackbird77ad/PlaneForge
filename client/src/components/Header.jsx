@@ -17,6 +17,16 @@ const navItems = [
     ]
   },
   {
+    to: '/products',
+    label: 'Products',
+    dropdown: [
+      { to: '/products', label: 'All Products' },
+      { to: '/products?type=physical', label: 'Hardware Kits' },
+      { to: '/products?type=digital', label: 'Digital Tools' },
+      { to: '/products?category=Custom%20Builds', label: 'Custom Builds' }
+    ]
+  },
+  {
     to: '/consultations',
     label: 'PlaneForge Consulting',
     dropdown: [

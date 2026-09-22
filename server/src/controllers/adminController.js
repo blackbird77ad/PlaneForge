@@ -1,24 +1,29 @@
 import { BlogPost } from '../models/BlogPost.js';
+import { CartItem } from '../models/CartItem.js';
 import { Consultation } from '../models/Consultation.js';
 import { ContactInquiry } from '../models/ContactInquiry.js';
 import { Course } from '../models/Course.js';
+import { CourseComment } from '../models/CourseComment.js';
 import { Enrollment } from '../models/Enrollment.js';
 import { NewsletterSubscription } from '../models/NewsletterSubscription.js';
 import { Order } from '../models/Order.js';
 import { Progress } from '../models/Progress.js';
+import { Product } from '../models/Product.js';
 import { SystemSetting } from '../models/SystemSetting.js';
 import { User } from '../models/User.js';
 import { grantCourseAccess, isEnrollmentActive } from '../services/accessService.js';
 import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
-const userRoles = ['student', 'consultant', 'partner', 'admin'];
+const userRoles = ['user', 'student', 'consultant', 'partner', 'admin'];
+const adminCreatedUserRoles = ['user', 'consultant', 'partner'];
 const userStatuses = ['active', 'suspended', 'pending'];
 const inquiryStatuses = ['new', 'in_review', 'responded', 'closed'];
 const inquiryPriorities = ['low', 'normal', 'high'];
 const consultationStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
 const orderStatuses = ['pending', 'payment_initialized', 'verified', 'paid', 'failed', 'refunded'];
 const articleStatuses = ['draft', 'published'];
+const productStatuses = ['draft', 'published', 'archived'];
 
 const pagination = ({ page = 1, limit = 25, maxLimit = 100 } = {}) => {
   const safeLimit = Math.min(Math.max(Number(limit) || 25, 1), maxLimit);
@@ -43,6 +48,51 @@ const parseDate = (value) => {
   return Number.isNaN(date.getTime()) ? undefined : date;
 };
 
+const normalizeUserRole = (role) =>
+  !role || ['learner', 'student', 'buyer'].includes(role) ? 'user' : role;
+
+const publicUserRoleQuery = { $in: ['user', 'student'] };
+
+const compactString = (value, maxLength = 240) => {
+  if (value == null) return '';
+  return String(value).trim().slice(0, maxLength);
+};
+
+const normalizeContactNumber = (value) => compactString(value, 80);
+
+const parseDateOfBirth = (value) => {
+  const rawDate = compactString(value, 40);
+  if (!rawDate) {
+    throw new ApiError(400, 'Date of birth is required');
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+    throw new ApiError(400, 'Use a valid date of birth');
+  }
+
+  const [year, month, day] = rawDate.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    throw new ApiError(400, 'Use a valid date of birth');
+  }
+
+  if (date > new Date()) {
+    throw new ApiError(400, 'Date of birth cannot be in the future');
+  }
+
+  return date;
+};
+
+const hasLockedAccountUpdate = (body = {}) => {
+  const lockedFields = ['email', 'contact', 'contactNumber', 'phone', 'dateOfBirth'];
+  const profileBody = body.profile && typeof body.profile === 'object' ? body.profile : {};
+  return lockedFields.some((field) => field in body || field in profileBody);
+};
+
 export const overview = asyncHandler(async (req, res) => {
   const [
     students,
@@ -51,22 +101,30 @@ export const overview = asyncHandler(async (req, res) => {
     admins,
     courses,
     draftCourses,
+    products,
+    draftProducts,
     orders,
     pendingOrders,
     consultations,
+    cartItems,
+    activeCartItems,
     subscribers,
     inquiries,
     activeEnrollments
   ] = await Promise.all([
-    User.countDocuments({ role: 'student' }),
+    User.countDocuments({ role: publicUserRoleQuery }),
     User.countDocuments({ role: 'consultant' }),
     User.countDocuments({ role: 'partner' }),
     User.countDocuments({ role: 'admin' }),
     Course.countDocuments({ status: 'published' }),
     Course.countDocuments({ status: 'draft' }),
+    Product.countDocuments({ status: 'published' }),
+    Product.countDocuments({ status: 'draft' }),
     Order.find({ status: 'paid' }),
     Order.countDocuments({ status: { $in: ['pending', 'payment_initialized', 'verified'] } }),
     Consultation.countDocuments(),
+    CartItem.countDocuments(),
+    CartItem.countDocuments({ status: 'active' }),
     NewsletterSubscription.countDocuments({ status: 'active' }),
     ContactInquiry.countDocuments({ status: { $ne: 'closed' } }),
     Enrollment.countDocuments({
@@ -79,19 +137,228 @@ export const overview = asyncHandler(async (req, res) => {
 
   res.json({
     students,
+    users: students,
     consultants,
     partners,
     admins,
     courses,
     draftCourses,
+    products,
+    draftProducts,
     paidOrders: orders.length,
     pendingOrders,
     consultations,
+    cartItems,
+    activeCartItems,
     subscribers,
     inquiries,
     activeEnrollments,
     revenue
   });
+});
+
+export const listActivity = asyncHandler(async (req, res) => {
+  const { limit } = req.query;
+  const safeLimit = Math.min(Math.max(Number(limit) || 40, 1), 100);
+  const [
+    recentUsers,
+    recentOrders,
+    recentProgress,
+    recentConsultations,
+    recentInquiries,
+    recentComments,
+    recentCartItems
+  ] = await Promise.all([
+    User.find()
+      .select('name email role status createdAt')
+      .sort({ createdAt: -1 })
+      .limit(safeLimit),
+    Order.find()
+      .populate('user', 'name email role')
+      .populate('course', 'title slug')
+      .populate('product', 'title slug sku')
+      .sort({ createdAt: -1 })
+      .limit(safeLimit),
+    Progress.find()
+      .populate('user', 'name email role')
+      .populate('course', 'title slug')
+      .sort({ updatedAt: -1 })
+      .limit(safeLimit),
+    Consultation.find()
+      .populate('student', 'name email role')
+      .populate('consultant', 'name email role')
+      .sort({ createdAt: -1 })
+      .limit(safeLimit),
+    ContactInquiry.find()
+      .sort({ createdAt: -1 })
+      .limit(safeLimit),
+    CourseComment.find()
+      .populate('user', 'name email role')
+      .populate('course', 'title slug')
+      .sort({ createdAt: -1 })
+      .limit(safeLimit),
+    CartItem.find()
+      .populate('user', 'name email role')
+      .populate('course', 'title slug')
+      .populate('product', 'title slug sku')
+      .sort({ updatedAt: -1 })
+      .limit(safeLimit)
+  ]);
+
+  const activities = [
+    ...recentUsers.map((user) => ({
+      id: `user-${user._id}`,
+      type: 'account',
+      label: 'Account created',
+      actorName: user.name,
+      actorEmail: user.email,
+      status: user.status,
+      detail: `${user.role} account`,
+      createdAt: user.createdAt
+    })),
+    ...recentOrders.map((order) => ({
+      id: `order-${order._id}`,
+      type: 'purchase',
+      label: 'Purchase activity',
+      actorName: order.user?.name || order.invoice?.customerName || 'Unknown customer',
+      actorEmail: order.user?.email || order.invoice?.customerEmail,
+      status: order.status,
+      amount: order.amount,
+      currency: order.currency,
+      detail: order.course?.title || order.product?.title || order.invoice?.itemName || order.invoiceNumber,
+      createdAt: order.createdAt
+    })),
+    ...recentProgress.map((item) => ({
+      id: `progress-${item._id}`,
+      type: 'learning_progress',
+      label: 'Learning progress',
+      actorName: item.user?.name || 'Unknown learner',
+      actorEmail: item.user?.email,
+      status: `${item.percentComplete || 0}% complete`,
+      detail: item.course?.title || 'Course progress',
+      createdAt: item.updatedAt || item.createdAt
+    })),
+    ...recentConsultations.map((consultation) => ({
+      id: `consultation-${consultation._id}`,
+      type: 'consulting',
+      label: 'Consulting activity',
+      actorName: consultation.student?.name || 'Unknown client',
+      actorEmail: consultation.student?.email,
+      status: consultation.status,
+      amount: consultation.amount,
+      currency: consultation.currency,
+      detail: `${consultation.service} with ${consultation.consultant?.name || 'consultant'}`,
+      createdAt: consultation.createdAt
+    })),
+    ...recentInquiries.map((inquiry) => ({
+      id: `inquiry-${inquiry._id}`,
+      type: 'inquiry',
+      label: 'Contact inquiry',
+      actorName: inquiry.name,
+      actorEmail: inquiry.email,
+      status: inquiry.status,
+      detail: `${inquiry.topic || inquiry.intent}: ${inquiry.subject || inquiry.message}`,
+      createdAt: inquiry.createdAt
+    })),
+    ...recentComments.map((comment) => ({
+      id: `comment-${comment._id}`,
+      type: 'course_comment',
+      label: comment.source === 'tutor_request' ? 'Tutor request' : 'Course comment',
+      actorName: comment.user?.name || 'Unknown learner',
+      actorEmail: comment.user?.email,
+      status: comment.status,
+      detail: `${comment.course?.title || 'Course'}${comment.lessonTitle ? ` / ${comment.lessonTitle}` : ''}: ${comment.message}`,
+      createdAt: comment.createdAt
+    })),
+    ...recentCartItems.map((item) => ({
+      id: `cart-${item._id}`,
+      type: 'cart',
+      label: 'Cart activity',
+      actorName: item.user?.name || 'Unknown account',
+      actorEmail: item.user?.email,
+      status: item.status,
+      amount: item.unitPrice,
+      currency: item.currency,
+      detail: item.course?.title || item.product?.title || item.productName || item.productId || 'Cart item',
+      createdAt: item.updatedAt || item.createdAt
+    }))
+  ]
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, safeLimit);
+
+  res.json({ activities });
+});
+
+export const createUser = asyncHandler(async (req, res) => {
+  const {
+    name,
+    email,
+    contactNumber,
+    dateOfBirth,
+    password,
+    role = 'user',
+    status = 'active',
+    title,
+    specialty,
+    bio,
+    consultationFee,
+    languages,
+    profile,
+    partnerCode,
+    commissionRate
+  } = req.body;
+  const normalizedRole = normalizeUserRole(role);
+  const normalizedStatus = status || 'active';
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const normalizedPassword = String(password || '');
+  const normalizedContactNumber = normalizeContactNumber(contactNumber);
+
+  if (!String(name || '').trim() || !normalizedEmail || !normalizedContactNumber || !normalizedPassword) {
+    throw new ApiError(400, 'Name, email, contact number and password are required');
+  }
+
+  if (normalizedPassword.length < 8) {
+    throw new ApiError(400, 'Use at least 8 characters for the password');
+  }
+
+  if (!adminCreatedUserRoles.includes(normalizedRole)) {
+    throw new ApiError(400, 'Admin-created accounts must be users, consultants, or partners');
+  }
+
+  if (!userStatuses.includes(normalizedStatus)) {
+    throw new ApiError(400, 'Invalid user status');
+  }
+
+  const parsedDateOfBirth = parseDateOfBirth(dateOfBirth);
+
+  const existing = await User.findOne({ email: normalizedEmail });
+  if (existing) {
+    throw new ApiError(409, 'An account with this email already exists');
+  }
+
+  const user = await User.create({
+    name: String(name).trim(),
+    email: normalizedEmail,
+    contactNumber: normalizedContactNumber,
+    dateOfBirth: parsedDateOfBirth,
+    passwordHash: await User.hashPassword(normalizedPassword),
+    role: normalizedRole,
+    status: normalizedStatus,
+    title: String(title || '').trim() || undefined,
+    specialty: String(specialty || '').trim() || undefined,
+    bio: String(bio || '').trim() || undefined,
+    consultationFee: Number(consultationFee || 0),
+    languages: Array.isArray(languages) && languages.length ? languages : undefined,
+    profile: profile && typeof profile === 'object' ? profile : undefined,
+    partnerCode: String(partnerCode || '').trim() || undefined,
+    commissionRate: Math.max(0, Number(commissionRate || 0))
+  });
+
+  const createdUser = await User.findById(user._id)
+    .select('-passwordHash')
+    .populate('ownedCourses', 'title slug status');
+
+  res.status(201).json({ user: createdUser });
 });
 
 export const listUsers = asyncHandler(async (req, res) => {
@@ -101,7 +368,7 @@ export const listUsers = asyncHandler(async (req, res) => {
     ...textSearch(search, ['name', 'email', 'title', 'specialty', 'profile.organization'])
   };
 
-  if (role) query.role = role;
+  if (role) query.role = normalizeUserRole(role) === 'user' ? publicUserRoleQuery : normalizeUserRole(role);
   if (status) query.status = status;
 
   const [users, total] = await Promise.all([
@@ -126,6 +393,10 @@ export const listUsers = asyncHandler(async (req, res) => {
 });
 
 export const updateUser = asyncHandler(async (req, res) => {
+  if (hasLockedAccountUpdate(req.body)) {
+    throw new ApiError(400, 'Email, contact number, and date of birth cannot be changed after account creation');
+  }
+
   const allowed = [
     'name',
     'role',
@@ -136,12 +407,20 @@ export const updateUser = asyncHandler(async (req, res) => {
     'consultationFee',
     'languages',
     'profile',
-    'availability'
+    'availability',
+    'qualifications',
+    'experienceYears',
+    'partnerCode',
+    'commissionRate'
   ];
   const updates = {};
 
   for (const key of allowed) {
     if (key in req.body) updates[key] = req.body[key];
+  }
+
+  if (updates.role) {
+    updates.role = normalizeUserRole(updates.role);
   }
 
   if (updates.role && !userRoles.includes(updates.role)) {
@@ -235,19 +514,23 @@ export const listPayments = asyncHandler(async (req, res) => {
   if (provider) query.provider = provider;
 
   let matchingCourseIds;
+  let matchingProductIds;
   let matchingUserIds;
   if (search?.trim()) {
     const regex = new RegExp(search.trim(), 'i');
-    const [courses, users] = await Promise.all([
+    const [courses, products, users] = await Promise.all([
       Course.find({ title: regex }).select('_id'),
+      Product.find({ $or: [{ title: regex }, { sku: regex }] }).select('_id'),
       User.find({ $or: [{ name: regex }, { email: regex }] }).select('_id')
     ]);
     matchingCourseIds = courses.map((course) => course._id);
+    matchingProductIds = products.map((product) => product._id);
     matchingUserIds = users.map((user) => user._id);
     query.$or = [
       { invoiceNumber: regex },
       { paymentRef: regex },
       { course: { $in: matchingCourseIds } },
+      { product: { $in: matchingProductIds } },
       { user: { $in: matchingUserIds } }
     ];
   }
@@ -256,6 +539,7 @@ export const listPayments = asyncHandler(async (req, res) => {
     Order.find(query)
       .populate('user', 'name email role')
       .populate('course', 'title slug')
+      .populate('product', 'title slug sku')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(safeLimit),
@@ -280,7 +564,7 @@ export const updatePayment = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Invalid payment status');
   }
 
-  const order = await Order.findById(req.params.id).populate('user').populate('course');
+  const order = await Order.findById(req.params.id).populate('user').populate('course').populate('product');
 
   if (!order) {
     throw new ApiError(404, 'Order not found');
@@ -289,7 +573,7 @@ export const updatePayment = asyncHandler(async (req, res) => {
   order.status = status;
   if (['verified', 'paid'].includes(status)) {
     order.verifiedAt = order.verifiedAt || new Date();
-    if (!order.accessGrantedAt && order.user && order.course) {
+    if (order.itemType === 'course' && !order.accessGrantedAt && order.user && order.course) {
       await grantCourseAccess({
         userId: order.user._id,
         course: order.course,
@@ -298,13 +582,56 @@ export const updatePayment = asyncHandler(async (req, res) => {
       });
       order.accessGrantedAt = new Date();
     }
+
+    if (order.itemType === 'product' && !order.fulfilledAt) {
+      if (order.product) {
+        const productUpdates = {
+          $inc: {
+            soldCount: order.quantity || 1
+          }
+        };
+
+        if (order.product.inventory?.track) {
+          productUpdates.$inc['inventory.quantity'] = -Math.max(1, order.quantity || 1);
+        }
+
+        await Product.findByIdAndUpdate(order.product._id, productUpdates);
+      }
+
+      order.fulfilledAt = new Date();
+    }
   }
 
   await order.save();
 
+  if (['verified', 'paid'].includes(status)) {
+    const cartLookup = {
+      user: order.user._id,
+      itemType: order.itemType || 'course',
+      status: 'active'
+    };
+    if (order.itemType === 'product') {
+      cartLookup.product = order.product?._id;
+    } else {
+      cartLookup.course = order.course?._id;
+    }
+
+    await CartItem.updateMany(
+      cartLookup,
+      {
+        $set: {
+          status: 'converted',
+          order: order._id,
+          convertedAt: new Date()
+        }
+      }
+    );
+  }
+
   const populatedOrder = await Order.findById(order._id)
     .populate('user', 'name email role')
-    .populate('course', 'title slug');
+    .populate('course', 'title slug')
+    .populate('product', 'title slug sku');
 
   res.json({ order: populatedOrder });
 });
@@ -381,12 +708,53 @@ export const updateConsultation = asyncHandler(async (req, res) => {
 });
 
 export const listContent = asyncHandler(async (req, res) => {
-  const [courses, articles] = await Promise.all([
+  const [courses, articles, products] = await Promise.all([
     Course.find().sort({ createdAt: -1 }),
-    BlogPost.find().sort({ publishedAt: -1 })
+    BlogPost.find().sort({ publishedAt: -1 }),
+    Product.find().sort({ createdAt: -1 })
   ]);
 
-  res.json({ courses, articles });
+  res.json({ courses, articles, products });
+});
+
+export const createProduct = asyncHandler(async (req, res) => {
+  if (req.body.status && !productStatuses.includes(req.body.status)) {
+    throw new ApiError(400, 'Invalid product status');
+  }
+
+  const product = await Product.create(req.body);
+  res.status(201).json({ product });
+});
+
+export const updateProduct = asyncHandler(async (req, res) => {
+  if (req.body.status && !productStatuses.includes(req.body.status)) {
+    throw new ApiError(400, 'Invalid product status');
+  }
+
+  const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
+    new: true,
+    runValidators: true
+  });
+
+  if (!product) {
+    throw new ApiError(404, 'Product not found');
+  }
+
+  res.json({ product });
+});
+
+export const archiveProduct = asyncHandler(async (req, res) => {
+  const product = await Product.findByIdAndUpdate(
+    req.params.id,
+    { status: 'archived' },
+    { new: true, runValidators: true }
+  );
+
+  if (!product) {
+    throw new ApiError(404, 'Product not found');
+  }
+
+  res.json({ product, message: 'Product archived' });
 });
 
 export const createArticle = asyncHandler(async (req, res) => {

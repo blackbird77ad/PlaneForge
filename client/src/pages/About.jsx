@@ -5,7 +5,6 @@ import {
   BookOpen,
   CircuitBoard,
   Factory,
-  GraduationCap,
   Layers,
   ShieldCheck,
   Users
@@ -75,13 +74,6 @@ export const About = () => (
               Consult PlaneForge
             </Link>
           </div>
-        </div>
-        <div className="public-hero-panel readable-hero-panel">
-          <GraduationCap size={34} />
-          <strong>Easy to navigate</strong>
-          <p>
-            Students can find a PCB track, enroll, and continue learning without confusion.
-          </p>
         </div>
       </div>
     </section>
