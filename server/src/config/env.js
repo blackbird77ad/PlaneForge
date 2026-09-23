@@ -42,8 +42,18 @@ export const env = {
     paystackWebhookSecret: process.env.PAYSTACK_WEBHOOK_SECRET
   },
   streaming: {
-    provider: process.env.STREAM_PROVIDER || 'cloudflare',
+    provider: process.env.STREAM_PROVIDER || 'unconfigured',
     tokenTtlSeconds: Number(process.env.STREAM_TOKEN_TTL_SECONDS || 300),
+    mux: {
+      tokenId: process.env.MUX_TOKEN_ID,
+      tokenSecret: process.env.MUX_TOKEN_SECRET,
+      dataEnvironmentKey: process.env.MUX_DATA_ENV_KEY
+    },
+    bunny: {
+      libraryId: process.env.BUNNY_STREAM_LIBRARY_ID,
+      apiKey: process.env.BUNNY_STREAM_API_KEY,
+      pullZoneUrl: process.env.BUNNY_STREAM_PULL_ZONE_URL
+    },
     cloudflare: {
       accountId: process.env.CLOUDFLARE_STREAM_ACCOUNT_ID,
       apiToken: process.env.CLOUDFLARE_STREAM_API_TOKEN,

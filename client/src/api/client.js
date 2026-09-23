@@ -1,12 +1,12 @@
 import { articles, consultants, courses, products } from '../data/catalog.js';
 import { safeLocalStorage, safeSessionStorage } from '../utils/storage.js';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL =
+  import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://127.0.0.1:5001/api' : '/api');
 const tokenKey = 'planeforge_token';
 const deviceKey = 'planeforge_device_id';
 const storageUser = 'planeforge_user';
 const demoChallengeKey = 'planeforge_demo_challenge';
-const demoCode = '123456';
 const demoPassword = 'Password123!';
 
 const demoUsers = [
@@ -97,6 +97,8 @@ const hasDemoChallenge = ({ challengeId } = {}) => {
   }
 };
 
+const generateDemoCode = () => String(Math.floor(100000 + Math.random() * 900000));
+
 const compactString = (value, maxLength = 240) => {
   if (value == null) return '';
   return String(value).trim().slice(0, maxLength);
@@ -152,7 +154,7 @@ const demoLogin = ({ email, password, role }) => {
 
   const challenge = {
     challengeId: `demo-${Date.now()}`,
-    code: demoCode,
+    code: generateDemoCode(),
     expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
     user
   };
@@ -163,8 +165,7 @@ const demoLogin = ({ email, password, role }) => {
     requiresVerification: true,
     challengeId: challenge.challengeId,
     expiresAt: challenge.expiresAt,
-    tokenTtlDays: 3,
-    devCode: demoCode
+    tokenTtlDays: 3
   };
 };
 
@@ -263,14 +264,6 @@ const sortProducts = (items, sort) => {
   return list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 };
 
-const hasCatalogFilters = (params = {}) =>
-  ['search', 'category', 'discipline', 'difficulty', 'instructor', 'price', 'language', 'featured'].some(
-    (key) => params[key]
-  );
-
-const hasProductFilters = (params = {}) =>
-  ['search', 'category', 'type', 'productType', 'price', 'featured'].some((key) => params[key]);
-
 export const getLocalCourseResults = (params = {}) => {
   const page = Number(params.page || 1);
   const limit = Number(params.limit || 12);
@@ -330,12 +323,7 @@ export const getCourses = async (params = {}) => {
   ).toString();
 
   try {
-    const data = await request(`/courses${query ? `?${query}` : ''}`, { timeoutMs: 800 });
-    if (!data.courses?.length) {
-      const localResults = getLocalCourseResults(params);
-      if (localResults.courses.length || !hasCatalogFilters(params)) return localResults;
-    }
-    return data;
+    return await request(`/courses${query ? `?${query}` : ''}`, { timeoutMs: 800 });
   } catch {
     return getLocalCourseResults(params);
   }
@@ -398,12 +386,7 @@ export const getProducts = async (params = {}) => {
   ).toString();
 
   try {
-    const data = await request(`/products${query ? `?${query}` : ''}`, { timeoutMs: 800 });
-    if (!data.products?.length) {
-      const localResults = getLocalProductResults(params);
-      if (localResults.products.length || !hasProductFilters(params)) return localResults;
-    }
-    return data;
+    return await request(`/products${query ? `?${query}` : ''}`, { timeoutMs: 800 });
   } catch {
     return getLocalProductResults(params);
   }
@@ -566,8 +549,7 @@ export const loginRequest = async (payload) => {
       body: JSON.stringify(payload)
     });
   } catch (err) {
-    if (err.status && !isDemoLoginPayload(payload)) throw err;
-    return demoLogin(payload);
+    throw err;
   }
 };
 
@@ -585,8 +567,7 @@ export const verifyLoginRequest = async (payload) => {
       body: JSON.stringify(payload)
     });
   } catch (err) {
-    if (err.status && !hasDemoChallenge(payload)) throw err;
-    return demoVerifyLogin(payload);
+    throw err;
   }
 };
 
@@ -645,6 +626,24 @@ export const updateProfileRequest = async (payload) => {
     return { user: nextUser };
   }
 };
+
+export const requestProfileChange = (payload) =>
+  request('/users/profile/change-request', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+
+export const confirmProfileChange = (payload) =>
+  request('/users/profile/change-confirm', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+
+export const uploadImageAsset = (payload) =>
+  request('/media/images', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
 
 export const getDashboard = async () => {
   try {
@@ -720,6 +719,30 @@ export const updateAdminConsultation = (consultationId, payload) =>
     body: JSON.stringify(payload)
   });
 
+export const getAdminExpenses = () => request('/admin/expenses');
+
+export const createAdminExpense = (payload) =>
+  request('/admin/expenses', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+
+export const updateAdminExpense = (expenseId, payload) =>
+  request(`/admin/expenses/${expenseId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
+  });
+
+export const getAdminEarnings = () => request('/admin/earnings');
+
+export const getMyEarnings = () => request('/users/earnings');
+
+export const withdrawEarning = (earningId) =>
+  request(`/users/earnings/${earningId}/withdraw`, {
+    method: 'POST',
+    body: JSON.stringify({})
+  });
+
 export const getAdminInquiries = (params = {}) => {
   const query = new URLSearchParams(
     Object.entries(params).filter(([, value]) => value !== '' && value !== undefined && value !== null)
@@ -761,6 +784,12 @@ export const archiveAdminCourse = (courseId) =>
 
 export const createStreamUploadIntent = ({ courseId, moduleId, lessonId }) =>
   request(`/courses/${courseId}/modules/${moduleId}/lessons/${lessonId}/stream-upload`, {
+    method: 'POST',
+    body: JSON.stringify({})
+  });
+
+export const refreshStreamUpload = ({ courseId, moduleId, lessonId }) =>
+  request(`/courses/${courseId}/modules/${moduleId}/lessons/${lessonId}/stream-refresh`, {
     method: 'POST',
     body: JSON.stringify({})
   });

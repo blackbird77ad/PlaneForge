@@ -1,9 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import {
   completePasswordReset,
+  confirmProfileChange,
   getMe,
   loginRequest,
   logoutRequest,
+  requestProfileChange,
   requestPasswordReset,
   registerRequest,
   updateProfileRequest,
@@ -133,6 +135,16 @@ export const AuthProvider = ({ children }) => {
 
   const finishPasswordReset = (payload) => completePasswordReset(payload);
 
+  const startProfileChange = (payload) => requestProfileChange(payload);
+
+  const finishProfileChange = async (payload) => {
+    const data = await confirmProfileChange(payload);
+    if (data.user) {
+      persist(data.user, safeLocalStorage.getItem(storageToken), session);
+    }
+    return data;
+  };
+
   const value = useMemo(
     () => ({
       user,
@@ -147,6 +159,8 @@ export const AuthProvider = ({ children }) => {
       refreshMe,
       startPasswordReset,
       finishPasswordReset,
+      startProfileChange,
+      finishProfileChange,
       isAuthenticated: Boolean(user)
     }),
     [user, session, pendingChallenge]

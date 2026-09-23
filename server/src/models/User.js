@@ -44,8 +44,7 @@ const userSchema = new mongoose.Schema(
       trim: true
     },
     dateOfBirth: {
-      type: Date,
-      immutable: true
+      type: Date
     },
     passwordHash: {
       type: String,
@@ -75,6 +74,17 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0
     },
+    requestedConsultationFee: {
+      type: Number,
+      default: 0
+    },
+    consultationFeeStatus: {
+      type: String,
+      enum: ['not_requested', 'pending', 'approved', 'rejected'],
+      default: 'not_requested',
+      index: true
+    },
+    consultationFeeReviewedAt: Date,
     languages: {
       type: [String],
       default: ['English']
@@ -92,6 +102,32 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0
     },
+    revenueShare: {
+      shareType: {
+        type: String,
+        enum: ['percentage', 'fixed'],
+        default: 'percentage'
+      },
+      shareValue: {
+        type: Number,
+        default: 0
+      },
+      basedOn: {
+        type: String,
+        enum: ['net', 'gross'],
+        default: 'net'
+      },
+      vestingEnabled: {
+        type: Boolean,
+        default: false
+      },
+      vestingDurationDays: {
+        type: Number,
+        default: 0
+      },
+      activeUntil: Date
+    },
+    stripeConnectAccountId: String,
     lastLoginAt: Date
   },
   {

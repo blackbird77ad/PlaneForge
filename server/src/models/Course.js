@@ -28,7 +28,7 @@ const lessonSchema = new mongoose.Schema(
       provider: {
         type: String,
         enum: ['cloudflare', 'mux', 'bunny', 'vimeo', 'external', 'unconfigured'],
-        default: 'cloudflare'
+        default: 'unconfigured'
       },
       assetId: String,
       playbackId: String,

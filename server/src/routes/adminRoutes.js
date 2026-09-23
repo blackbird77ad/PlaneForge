@@ -3,6 +3,7 @@ import {
   archiveArticle,
   archiveProduct,
   createArticle,
+  createExpense,
   createProduct,
   createUser,
   grantEnrollment,
@@ -10,12 +11,15 @@ import {
   listInquiries,
   listConsultations,
   listContent,
+  listEarnings,
+  listExpenses,
   listPayments,
   listSettings,
   listUsers,
   overview,
   updateArticle,
   updateConsultation,
+  updateExpense,
   updateInquiry,
   updatePayment,
   updateProduct,
@@ -37,6 +41,10 @@ adminRoutes.get('/payments', listPayments);
 adminRoutes.patch('/payments/:id', updatePayment);
 adminRoutes.get('/consultations', listConsultations);
 adminRoutes.patch('/consultations/:id', updateConsultation);
+adminRoutes.get('/expenses', listExpenses);
+adminRoutes.post('/expenses', createExpense);
+adminRoutes.patch('/expenses/:id', updateExpense);
+adminRoutes.get('/earnings', listEarnings);
 adminRoutes.get('/content', listContent);
 adminRoutes.post('/products', createProduct);
 adminRoutes.patch('/products/:id', updateProduct);

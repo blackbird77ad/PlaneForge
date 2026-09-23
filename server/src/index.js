@@ -12,6 +12,7 @@ import { consultationRoutes } from './routes/consultationRoutes.js';
 import { contentRoutes } from './routes/contentRoutes.js';
 import { courseRoutes } from './routes/courseRoutes.js';
 import { demoRoutes } from './routes/demoRoutes.js';
+import { mediaRoutes } from './routes/mediaRoutes.js';
 import { orderRoutes } from './routes/orderRoutes.js';
 import { productRoutes } from './routes/productRoutes.js';
 import { userRoutes } from './routes/userRoutes.js';
@@ -99,6 +100,7 @@ if (env.demoBackend) {
   app.use('/api/products', productRoutes);
   app.use('/api/content', contentRoutes);
   app.use('/api/users', userRoutes);
+  app.use('/api/media', mediaRoutes);
   app.use('/api/admin', adminRoutes);
 }
 

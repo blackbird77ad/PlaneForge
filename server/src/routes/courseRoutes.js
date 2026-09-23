@@ -9,6 +9,7 @@ import {
   getLearningCourse,
   listCourseComments,
   listCourses,
+  refreshLessonStream,
   updateCourse
 } from '../controllers/courseController.js';
 import { allowRoles, protect } from '../middleware/auth.js';
@@ -28,5 +29,11 @@ courseRoutes.post(
   protect,
   allowRoles('admin'),
   createLessonStreamUpload
+);
+courseRoutes.post(
+  '/:id/modules/:moduleId/lessons/:lessonId/stream-refresh',
+  protect,
+  allowRoles('admin'),
+  refreshLessonStream
 );
 courseRoutes.delete('/:id', protect, allowRoles('admin'), deleteCourse);

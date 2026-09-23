@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { KeyRound, UserPlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { PasswordField } from '../components/PasswordField.jsx';
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -65,7 +66,7 @@ export const Register = () => {
           {!challenge ? (
             <>
               <label>
-                Name
+                Full name
                 <input
                   value={form.name}
                   onChange={(event) => setForm({ ...form, name: event.target.value })}
@@ -100,15 +101,11 @@ export const Register = () => {
                   required
                 />
               </label>
-              <label>
-                Password
-                <input
-                  value={form.password}
-                  onChange={(event) => setForm({ ...form, password: event.target.value })}
-                  type="password"
-                  required
-                />
-              </label>
+              <PasswordField
+                value={form.password}
+                onChange={(event) => setForm({ ...form, password: event.target.value })}
+                autoComplete="new-password"
+              />
             </>
           ) : (
             <label>
@@ -123,7 +120,6 @@ export const Register = () => {
               />
             </label>
           )}
-          {challenge?.devCode && <p className="form-success">Development code: {challenge.devCode}</p>}
           {error && <p className="form-error">{error}</p>}
           <button className="button primary full" type="submit" disabled={busy}>
             {challenge ? <KeyRound size={18} /> : <UserPlus size={18} />}

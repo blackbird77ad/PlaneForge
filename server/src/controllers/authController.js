@@ -31,10 +31,14 @@ const publicUser = (user) => ({
   qualifications: user.qualifications || [],
   experienceYears: user.experienceYears || 0,
   consultationFee: user.consultationFee || 0,
+  requestedConsultationFee: user.requestedConsultationFee || 0,
+  consultationFeeStatus: user.consultationFeeStatus || 'not_requested',
   languages: user.languages || ['English'],
   availability: user.availability || [],
   partnerCode: user.partnerCode,
   commissionRate: user.commissionRate || 0,
+  revenueShare: user.revenueShare || {},
+  stripeConnectAccountId: user.stripeConnectAccountId,
   ownedCourses: user.ownedCourses || [],
   profile: user.profile || {},
   createdAt: user.createdAt,
@@ -50,8 +54,6 @@ const codeExpiry = () =>
 const resetCodeExpiry = () =>
   new Date(Date.now() + env.auth.resetCodeTtlMinutes * 60 * 1000);
 
-const exposeDevCode = () => !env.resendApiKey && process.env.NODE_ENV !== 'production';
-
 const normalizeRequestedRole = (role) => {
   if (!role || ['learner', 'student', 'buyer'].includes(role)) return 'user';
   return role;
@@ -62,6 +64,15 @@ const accountRole = (role) => (['student', 'learner', 'buyer'].includes(role) ? 
 const compactString = (value, maxLength = 240) => {
   if (value == null) return '';
   return String(value).trim().slice(0, maxLength);
+};
+
+const assertFullName = (name) => {
+  const value = compactString(name, 120).replace(/\s+/g, ' ');
+  if (!value) throw new ApiError(400, 'Full name is required');
+  if (value.split(' ').filter(Boolean).length < 2) {
+    throw new ApiError(400, 'Enter your full name');
+  }
+  return value;
 };
 
 const normalizeContactNumber = (value) => compactString(value, 80);
@@ -149,15 +160,14 @@ const createLoginChallenge = async ({ user, req, deviceId }) => {
     requiresVerification: true,
     challengeId: challenge._id,
     expiresAt,
-    tokenTtlDays: env.auth.sessionTtlDays,
-    ...(exposeDevCode() ? { devCode: code } : {})
+    tokenTtlDays: env.auth.sessionTtlDays
   };
 };
 
 export const register = asyncHandler(async (req, res) => {
   const { name, email, password, role = 'user', adminSetupCode, contactNumber, dateOfBirth } = req.body;
   const deviceId = getDeviceId(req);
-  const normalizedName = compactString(name, 120);
+  const normalizedName = assertFullName(name);
   const normalizedEmail = compactString(email, 254).toLowerCase();
   const normalizedContactNumber = normalizeContactNumber(contactNumber);
 
@@ -355,8 +365,7 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
 
   res.json({
     message: 'If that account exists, a password reset code has been sent.',
-    expiresAt,
-    ...(exposeDevCode() ? { devCode: code } : {})
+    expiresAt
   });
 });
 

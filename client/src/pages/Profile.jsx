@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Camera, LoaderCircle, Save, Trash2, UserRound } from 'lucide-react';
+import { uploadImageAsset } from '../api/client.js';
 import { DashboardShell } from '../components/DashboardShell.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const emptyForm = {
   name: '',
+  contactNumber: '',
+  dateOfBirth: '',
   title: '',
   avatar: '',
   organization: '',
@@ -13,11 +16,14 @@ const emptyForm = {
   website: '',
   headline: '',
   experienceLevel: '',
-  learningGoal: ''
+  learningGoal: '',
+  consultationFee: ''
 };
 
 const formFromUser = (user) => ({
   name: user?.name || '',
+  contactNumber: user?.contactNumber || user?.profile?.phone || '',
+  dateOfBirth: user?.dateOfBirth ? new Date(user.dateOfBirth).toISOString().slice(0, 10) : '',
   title: user?.title || '',
   avatar: user?.avatar || '',
   organization: user?.profile?.organization || '',
@@ -26,7 +32,8 @@ const formFromUser = (user) => ({
   website: user?.profile?.website || '',
   headline: user?.profile?.headline || '',
   experienceLevel: user?.profile?.experienceLevel || '',
-  learningGoal: user?.profile?.learningGoal || ''
+  learningGoal: user?.profile?.learningGoal || '',
+  consultationFee: String(user?.requestedConsultationFee || user?.consultationFee || '')
 });
 
 const formatDateOfBirth = (value) => {
@@ -40,9 +47,11 @@ const formatDateOfBirth = (value) => {
 };
 
 export const Profile = () => {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, startProfileChange, finishProfileChange } = useAuth();
   const [form, setForm] = useState(() => (user ? formFromUser(user) : emptyForm));
   const [status, setStatus] = useState({ type: '', message: '' });
+  const [securityChange, setSecurityChange] = useState(null);
+  const [securityCode, setSecurityCode] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -72,12 +81,56 @@ export const Profile = () => {
           headline: form.headline,
           experienceLevel: form.experienceLevel,
           learningGoal: form.learningGoal
-        }
+        },
+        ...(user?.role === 'consultant' || user?.role === 'admin'
+          ? { consultationFee: Number(form.consultationFee || 0) }
+          : {})
       });
       if (nextUser) setForm(formFromUser(nextUser));
       setStatus({ type: 'success', message: 'Profile updated.' });
     } catch (error) {
       setStatus({ type: 'error', message: error.message || 'Profile could not be updated.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const submitSecurityChange = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setStatus({ type: '', message: '' });
+
+    try {
+      const data = await startProfileChange({
+        contactNumber: form.contactNumber,
+        dateOfBirth: form.dateOfBirth
+      });
+      setSecurityChange(data);
+      setSecurityCode('');
+      setStatus({ type: 'success', message: data.message });
+    } catch (error) {
+      setStatus({ type: 'error', message: error.message || 'Verification code could not be sent.' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmSecurityChange = async (event) => {
+    event?.preventDefault?.();
+    setSaving(true);
+    setStatus({ type: '', message: '' });
+
+    try {
+      const data = await finishProfileChange({
+        challengeId: securityChange?.challengeId,
+        code: securityCode
+      });
+      setSecurityChange(null);
+      setSecurityCode('');
+      if (data.user) setForm(formFromUser(data.user));
+      setStatus({ type: 'success', message: data.message || 'Profile security details updated.' });
+    } catch (error) {
+      setStatus({ type: 'error', message: error.message || 'Verification failed.' });
     } finally {
       setSaving(false);
     }
@@ -98,9 +151,28 @@ export const Profile = () => {
     }
 
     const reader = new FileReader();
-    reader.onload = () => {
-      setForm((current) => ({ ...current, avatar: reader.result || '' }));
+    reader.onload = async () => {
+      const data = reader.result || '';
+      setSaving(true);
       setStatus({ type: '', message: '' });
+
+      try {
+        const result = await uploadImageAsset({
+          data,
+          folder: 'planeforge/avatars',
+          publicId: `${user?.id || user?._id || 'profile'}-avatar`
+        });
+        setForm((current) => ({ ...current, avatar: result.asset?.secureUrl || data }));
+        setStatus({ type: 'success', message: 'Profile image uploaded.' });
+      } catch (error) {
+        setForm((current) => ({ ...current, avatar: data }));
+        setStatus({
+          type: 'error',
+          message: error.message || 'Cloudinary upload failed. The local preview was kept.'
+        });
+      } finally {
+        setSaving(false);
+      }
     };
     reader.onerror = () => {
       setStatus({ type: 'error', message: 'That image could not be loaded.' });
@@ -150,19 +222,51 @@ export const Profile = () => {
             Email
             <input value={user?.email || ''} readOnly disabled />
           </label>
-          <label>
-            Contact number
-            <input value={user?.contactNumber || user?.profile?.phone || ''} readOnly disabled />
-          </label>
-          <label>
-            Date of birth
-            <input value={formatDateOfBirth(user?.dateOfBirth)} readOnly disabled />
-          </label>
+          <span className="form-muted">Email cannot be changed from profile settings.</span>
         </div>
+
+        <fieldset className="profile-secure-change">
+          <legend>Verified account details</legend>
+          <div className="profile-grid">
+            <label>
+              Contact number
+              <input value={form.contactNumber} onChange={setField('contactNumber')} type="tel" />
+            </label>
+            <label>
+              Date of birth
+              <input value={form.dateOfBirth} onChange={setField('dateOfBirth')} type="date" />
+            </label>
+          </div>
+          <span className="form-muted">
+            Current date of birth: {formatDateOfBirth(user?.dateOfBirth)}. Changes are confirmed by an email code.
+          </span>
+          {securityChange ? (
+            <div className="profile-code-row">
+              <label>
+                Verification code
+                <input
+                  value={securityCode}
+                  onChange={(event) => setSecurityCode(event.target.value)}
+                  inputMode="numeric"
+                  maxLength={6}
+                  required
+                />
+              </label>
+              <button className="button primary" type="button" onClick={confirmSecurityChange} disabled={saving}>
+                {saving ? <LoaderCircle className="spin" size={17} /> : <Save size={17} />}
+                Confirm Change
+              </button>
+            </div>
+          ) : (
+            <button className="button secondary" type="button" onClick={submitSecurityChange} disabled={saving}>
+              Send Verification Code
+            </button>
+          )}
+        </fieldset>
 
         <div className="profile-grid">
           <label>
-            Name
+            Full name
             <input value={form.name} onChange={setField('name')} required />
           </label>
           <label>
@@ -204,6 +308,25 @@ export const Profile = () => {
             placeholder="Add the courses, products, or hardware skills you want to focus on."
           />
         </label>
+
+        {(user?.role === 'consultant' || user?.role === 'admin') && (
+          <label>
+            Consultation fee
+            <input
+              value={form.consultationFee}
+              onChange={setField('consultationFee')}
+              type="number"
+              min="0"
+              step="1"
+              placeholder="250"
+            />
+            {user?.role === 'consultant' && (
+              <span className="form-muted">
+                Fee changes go live after admin approval. Current status: {user?.consultationFeeStatus || 'not requested'}.
+              </span>
+            )}
+          </label>
+        )}
 
         <div className="profile-actions">
           <button className="button primary" type="submit" disabled={saving}>

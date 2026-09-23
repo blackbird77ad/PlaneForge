@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { KeyRound, RotateCcw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { PasswordField } from '../components/PasswordField.jsx';
 
 export const ResetPassword = () => {
   const location = useLocation();
@@ -27,7 +28,7 @@ export const ResetPassword = () => {
     try {
       if (step === 'request') {
         const data = await startPasswordReset({ email: form.email });
-        setMessage(data.devCode ? `${data.message} Development code: ${data.devCode}` : data.message);
+        setMessage(data.message);
         setStep('reset');
         return;
       }
@@ -90,24 +91,18 @@ export const ResetPassword = () => {
                   required
                 />
               </label>
-              <label>
-                New password
-                <input
-                  value={form.password}
-                  onChange={(event) => setForm({ ...form, password: event.target.value })}
-                  type="password"
-                  required
-                />
-              </label>
-              <label>
-                Confirm password
-                <input
-                  value={form.confirmPassword}
-                  onChange={(event) => setForm({ ...form, confirmPassword: event.target.value })}
-                  type="password"
-                  required
-                />
-              </label>
+              <PasswordField
+                label="New password"
+                value={form.password}
+                onChange={(event) => setForm({ ...form, password: event.target.value })}
+                autoComplete="new-password"
+              />
+              <PasswordField
+                label="Confirm password"
+                value={form.confirmPassword}
+                onChange={(event) => setForm({ ...form, confirmPassword: event.target.value })}
+                autoComplete="new-password"
+              />
             </>
           )}
 

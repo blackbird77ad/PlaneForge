@@ -284,6 +284,8 @@ const users = await User.insertMany([
     qualifications: planeforgeConsultantProfile.qualifications,
     experienceYears: planeforgeConsultantProfile.experienceYears,
     consultationFee: planeforgeConsultantProfile.consultationFee,
+    requestedConsultationFee: planeforgeConsultantProfile.consultationFee,
+    consultationFeeStatus: 'approved',
     languages: planeforgeConsultantProfile.languages,
     availability: planeforgeConsultantProfile.availability
   },
@@ -297,7 +299,8 @@ const users = await User.insertMany([
     avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=400&q=80',
     title: 'Training Partnerships Lead',
     partnerCode: 'PF-PARTNER-NORA',
-    commissionRate: 8
+    commissionRate: 8,
+    revenueShare: { shareType: 'percentage', shareValue: 8, basedOn: 'net', vestingEnabled: false }
   },
   {
     name: 'PlaneForge Admin',

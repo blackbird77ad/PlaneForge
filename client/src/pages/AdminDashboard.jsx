@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { DashboardShell } from '../components/DashboardShell.jsx';
 import { MetricCard } from '../components/MetricCard.jsx';
+import { PasswordField } from '../components/PasswordField.jsx';
 import { articles as fallbackArticles, consultants, courses as fallbackCourses } from '../data/catalog.js';
 import {
   archiveAdminArticle,
@@ -33,21 +34,26 @@ import {
   archiveAdminProduct,
   createAdminArticle,
   createAdminCourse,
+  createAdminExpense,
   createAdminProduct,
   createAdminUser,
   createStreamUploadIntent,
   getAdminActivity,
   getAdminConsultations,
   getAdminContent,
+  getAdminEarnings,
+  getAdminExpenses,
   getAdminInquiries,
   getAdminOverview,
   getAdminPayments,
   getAdminSettings,
   getAdminUsers,
   grantAdminEnrollment,
+  refreshStreamUpload,
   updateAdminArticle,
   updateAdminConsultation,
   updateAdminCourse,
+  updateAdminExpense,
   updateAdminInquiry,
   updateAdminPayment,
   updateAdminProduct,
@@ -55,10 +61,61 @@ import {
   upsertAdminSetting
 } from '../api/client.js';
 
+const encodeUploadMetadata = (items = {}) =>
+  Object.entries(items)
+    .filter(([, value]) => value)
+    .map(([key, value]) => `${key} ${btoa(unescape(encodeURIComponent(String(value))))}`)
+    .join(',');
+
+const uploadToMuxDirectUrl = ({ directUploadUrl, file, onProgress }) =>
+  new Promise((resolve, reject) => {
+    const create = new XMLHttpRequest();
+    create.open('POST', directUploadUrl);
+    create.setRequestHeader('Tus-Resumable', '1.0.0');
+    create.setRequestHeader('Upload-Length', String(file.size));
+    create.setRequestHeader(
+      'Upload-Metadata',
+      encodeUploadMetadata({ filename: file.name, filetype: file.type })
+    );
+    create.onload = () => {
+      if (create.status < 200 || create.status >= 300) {
+        reject(new Error('Mux upload could not be initialized.'));
+        return;
+      }
+
+      const location = create.getResponseHeader('Location');
+      if (!location) {
+        reject(new Error('Mux did not return an upload location.'));
+        return;
+      }
+
+      const patch = new XMLHttpRequest();
+      patch.open('PATCH', location);
+      patch.setRequestHeader('Tus-Resumable', '1.0.0');
+      patch.setRequestHeader('Upload-Offset', '0');
+      patch.setRequestHeader('Content-Type', 'application/offset+octet-stream');
+      patch.upload.onprogress = (event) => {
+        if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
+      };
+      patch.onload = () => {
+        if (patch.status >= 200 && patch.status < 300) {
+          onProgress?.(100);
+          resolve();
+        } else {
+          reject(new Error('Mux upload failed while sending the video.'));
+        }
+      };
+      patch.onerror = () => reject(new Error('Network error while uploading to Mux.'));
+      patch.send(file);
+    };
+    create.onerror = () => reject(new Error('Network error while creating the Mux upload.'));
+    create.send();
+  });
+
 const difficultyOptions = ['Beginner', 'Intermediate', 'Advanced', 'Professional', 'Capstone'];
 const courseStatusOptions = ['draft', 'published', 'archived'];
 const purchaseTypeOptions = ['one_time', 'subscription'];
-const streamProviders = ['cloudflare', 'mux', 'bunny', 'vimeo', 'external', 'unconfigured'];
+const streamProviders = ['mux', 'bunny', 'vimeo', 'external', 'unconfigured'];
 const streamStatusOptions = ['not_uploaded', 'uploading', 'processing', 'ready', 'failed'];
 const inquiryStatusOptions = ['open', 'new', 'in_review', 'responded', 'closed'];
 const inquiryUpdateStatuses = ['new', 'in_review', 'responded', 'closed'];
@@ -92,7 +149,7 @@ const emptyLesson = (order = 1) => ({
   isPreview: order === 1,
   order,
   stream: {
-    provider: 'cloudflare',
+    provider: 'unconfigured',
     status: 'not_uploaded',
     assetId: '',
     playbackId: '',
@@ -185,6 +242,19 @@ const initialUserForm = () => ({
   consultationFee: '',
   partnerCode: '',
   commissionRate: ''
+});
+
+const initialExpenseForm = () => ({
+  id: '',
+  title: '',
+  category: 'operations',
+  amount: '',
+  currency: 'USD',
+  periodStart: '',
+  periodEnd: '',
+  settledAmount: '0',
+  settlementStatus: 'unsettled',
+  notes: ''
 });
 
 const isServerRecord = (value) => serverIdPattern.test(String(value || ''));
@@ -298,7 +368,7 @@ const lessonPayload = (lesson, index) => ({
   isPreview: Boolean(lesson.isPreview),
   order: Number(lesson.order) || index + 1,
   stream: {
-    provider: lesson.stream?.provider || 'cloudflare',
+    provider: lesson.stream?.provider || 'unconfigured',
     status: lesson.stream?.status || 'not_uploaded',
     assetId: lesson.stream?.assetId?.trim() || undefined,
     playbackId: lesson.stream?.playbackId?.trim() || undefined,
@@ -427,12 +497,15 @@ export const AdminDashboard = () => {
   const [users, setUsers] = useState({ users: [], pagination: null });
   const [payments, setPayments] = useState({ orders: [], pagination: null });
   const [consultations, setConsultations] = useState({ consultations: [], pagination: null });
+  const [expenses, setExpenses] = useState([]);
+  const [earnings, setEarnings] = useState([]);
   const [settings, setSettings] = useState([]);
   const [courseForm, setCourseForm] = useState(() => initialCourseForm());
   const [productForm, setProductForm] = useState(() => initialProductForm());
   const [articleForm, setArticleForm] = useState(() => initialArticleForm());
   const [settingForm, setSettingForm] = useState(() => initialSettingForm());
   const [userForm, setUserForm] = useState(() => initialUserForm());
+  const [expenseForm, setExpenseForm] = useState(() => initialExpenseForm());
   const [grants, setGrants] = useState({});
   const [filters, setFilters] = useState({
     inquiryStatus: 'open',
@@ -451,6 +524,7 @@ export const AdminDashboard = () => {
   const [notice, setNotice] = useState({ type: '', text: '' });
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState('');
+  const [uploadProgress, setUploadProgress] = useState({});
 
   const courses = content.courses || [];
   const products = content.products || [];
@@ -502,6 +576,8 @@ export const AdminDashboard = () => {
         search: filters.consultationSearch,
         limit: 80
       }),
+      getAdminExpenses(),
+      getAdminEarnings(),
       getAdminSettings()
     ]);
 
@@ -513,6 +589,8 @@ export const AdminDashboard = () => {
       userResult,
       paymentResult,
       consultationResult,
+      expenseResult,
+      earningResult,
       settingResult
     ] =
       results;
@@ -524,6 +602,8 @@ export const AdminDashboard = () => {
     if (userResult.status === 'fulfilled') setUsers(userResult.value);
     if (paymentResult.status === 'fulfilled') setPayments(paymentResult.value);
     if (consultationResult.status === 'fulfilled') setConsultations(consultationResult.value);
+    if (expenseResult.status === 'fulfilled') setExpenses(expenseResult.value.expenses || []);
+    if (earningResult.status === 'fulfilled') setEarnings(earningResult.value.earnings || []);
     if (settingResult.status === 'fulfilled') setSettings(settingResult.value.settings || []);
 
     const failed = results.filter((result) => result.status === 'rejected');
@@ -552,6 +632,12 @@ export const AdminDashboard = () => {
 
   const updateUserForm = (key, value) =>
     setUserForm((current) => ({
+      ...current,
+      [key]: value
+    }));
+
+  const updateExpenseForm = (key, value) =>
+    setExpenseForm((current) => ({
       ...current,
       [key]: value
     }));
@@ -677,6 +763,52 @@ export const AdminDashboard = () => {
 
   const resetProductForm = () => setProductForm(initialProductForm());
 
+  const expensePayload = (form) => ({
+    title: form.title.trim(),
+    category: form.category.trim() || 'operations',
+    amount: Number(form.amount || 0),
+    currency: form.currency.trim().toUpperCase() || 'USD',
+    periodStart: form.periodStart || undefined,
+    periodEnd: form.periodEnd || undefined,
+    settledAmount: Number(form.settledAmount || 0),
+    settlementStatus: form.settlementStatus,
+    notes: form.notes.trim()
+  });
+
+  const submitExpense = async (event) => {
+    event.preventDefault();
+    const isEditing = isServerRecord(expenseForm.id);
+    const data = await runAction(
+      'expense-save',
+      () =>
+        isEditing
+          ? updateAdminExpense(expenseForm.id, expensePayload(expenseForm))
+          : createAdminExpense(expensePayload(expenseForm)),
+      isEditing ? 'Expense updated.' : 'Expense recorded.'
+    );
+
+    if (data?.expense) {
+      setExpenseForm(initialExpenseForm());
+      await refresh({ quiet: true });
+    }
+  };
+
+  const editExpense = (expense) => {
+    setExpenseForm({
+      id: expense._id || '',
+      title: expense.title || '',
+      category: expense.category || 'operations',
+      amount: String(expense.amount ?? ''),
+      currency: expense.currency || 'USD',
+      periodStart: expense.periodStart ? expense.periodStart.slice(0, 10) : '',
+      periodEnd: expense.periodEnd ? expense.periodEnd.slice(0, 10) : '',
+      settledAmount: String(expense.settledAmount ?? 0),
+      settlementStatus: expense.settlementStatus || 'unsettled',
+      notes: expense.notes || ''
+    });
+    document.getElementById('finance')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   const submitCourse = async (event) => {
     event.preventDefault();
     const payload = coursePayload(courseForm);
@@ -737,10 +869,54 @@ export const AdminDashboard = () => {
   };
 
   const requestUploadIntent = async ({ course, module, lesson }) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'video/*';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+
+      setBusyAction(`stream-${lesson._id}`);
+      setNotice({ type: '', text: '' });
+      setUploadProgress((current) => ({ ...current, [lesson._id]: 0 }));
+
+      try {
+        const data = await createStreamUploadIntent({
+          courseId: course._id,
+          moduleId: module._id,
+          lessonId: lesson._id
+        });
+
+        if (!data?.upload?.directUploadUrl) {
+          throw new Error(data?.upload?.message || 'Mux upload URL was not created.');
+        }
+
+        await uploadToMuxDirectUrl({
+          directUploadUrl: data.upload.directUploadUrl,
+          file,
+          onProgress: (progress) =>
+            setUploadProgress((current) => ({ ...current, [lesson._id]: progress }))
+        });
+
+        setNotice({
+          type: 'success',
+          text: 'Video uploaded to Mux. Refresh this lesson in a moment to pull the playback ID.'
+        });
+        await refresh({ quiet: true });
+      } catch (error) {
+        setNotice({ type: 'error', text: error.message || 'Mux upload failed.' });
+      } finally {
+        setBusyAction('');
+      }
+    };
+    input.click();
+  };
+
+  const refreshLessonStream = async ({ course, module, lesson }) => {
     const data = await runAction(
-      `stream-${lesson._id}`,
+      `stream-refresh-${lesson._id}`,
       () =>
-        createStreamUploadIntent({
+        refreshStreamUpload({
           courseId: course._id,
           moduleId: module._id,
           lessonId: lesson._id
@@ -748,11 +924,12 @@ export const AdminDashboard = () => {
       ''
     );
 
-    if (data?.upload) {
+    if (data?.stream) {
       setNotice({
         type: 'success',
-        text: data.upload.message || 'Stream upload intent prepared.'
+        text: data.stream.message || `Mux status: ${statusLabel(data.stream.status)}`
       });
+      await refresh({ quiet: true });
     }
   };
 
@@ -1283,11 +1460,11 @@ export const AdminDashboard = () => {
                   <input value={courseForm.language} onChange={(event) => updateCourseField('language', event.target.value)} />
                 </label>
                 <label className="admin-wide">
-                  Thumbnail URL
+                  Cloudinary thumbnail URL
                   <input value={courseForm.thumbnail} onChange={(event) => updateCourseField('thumbnail', event.target.value)} />
                 </label>
                 <label className="admin-wide">
-                  Banner URL
+                  Cloudinary banner URL
                   <input value={courseForm.bannerImage} onChange={(event) => updateCourseField('bannerImage', event.target.value)} />
                 </label>
                 <label className="admin-wide">
@@ -1400,7 +1577,7 @@ export const AdminDashboard = () => {
                             min="0"
                           />
                           <select
-                            value={lesson.stream?.provider || 'cloudflare'}
+                            value={lesson.stream?.provider || 'unconfigured'}
                             onChange={(event) => updateLessonStreamField(moduleIndex, lessonIndex, 'provider', event.target.value)}
                             aria-label="Stream provider"
                           >
@@ -1515,8 +1692,11 @@ export const AdminDashboard = () => {
                   <em className={`admin-pill ${statusTone(lesson.stream?.status || 'not_uploaded')}`}>
                     {statusLabel(lesson.stream?.status || 'not_uploaded')}
                   </em>
+                  {uploadProgress[lesson._id] != null && uploadProgress[lesson._id] < 100 && (
+                    <small>{uploadProgress[lesson._id]}% uploaded</small>
+                  )}
                 </span>
-                <span>
+                <span className="admin-icon-actions">
                   <button
                     className="button ghost small"
                     type="button"
@@ -1529,7 +1709,26 @@ export const AdminDashboard = () => {
                     }
                   >
                     {busyAction === `stream-${lesson._id}` ? <LoaderCircle className="spin" size={16} /> : <UploadCloud size={16} />}
-                    Prepare
+                    Upload
+                  </button>
+                  <button
+                    className="button ghost small"
+                    type="button"
+                    onClick={() => refreshLessonStream({ course, module, lesson })}
+                    disabled={
+                      !isServerRecord(course._id) ||
+                      !isServerRecord(module._id) ||
+                      !isServerRecord(lesson._id) ||
+                      !lesson.stream?.uploadId ||
+                      busyAction === `stream-refresh-${lesson._id}`
+                    }
+                  >
+                    {busyAction === `stream-refresh-${lesson._id}` ? (
+                      <LoaderCircle className="spin" size={16} />
+                    ) : (
+                      <RefreshCw size={16} />
+                    )}
+                    Refresh
                   </button>
                 </span>
               </div>
@@ -1634,11 +1833,11 @@ export const AdminDashboard = () => {
                   />
                 </label>
                 <label className="admin-wide">
-                  Thumbnail URL
+                  Cloudinary thumbnail URL
                   <input value={productForm.thumbnail} onChange={(event) => updateProductField('thumbnail', event.target.value)} />
                 </label>
                 <label className="admin-wide">
-                  Image URLs
+                  Cloudinary image URLs
                   <textarea value={productForm.imagesText} onChange={(event) => updateProductField('imagesText', event.target.value)} />
                 </label>
               </div>
@@ -1848,7 +2047,7 @@ export const AdminDashboard = () => {
             </div>
             <div className="admin-form-grid">
               <label>
-                Name
+                Full name
                 <input value={userForm.name} onChange={(event) => updateUserForm('name', event.target.value)} required />
               </label>
               <label>
@@ -1879,16 +2078,11 @@ export const AdminDashboard = () => {
                   required
                 />
               </label>
-              <label>
-                Password
-                <input
-                  value={userForm.password}
-                  onChange={(event) => updateUserForm('password', event.target.value)}
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                />
-              </label>
+              <PasswordField
+                value={userForm.password}
+                onChange={(event) => updateUserForm('password', event.target.value)}
+                autoComplete="new-password"
+              />
               <label>
                 Role
                 <select value={userForm.role} onChange={(event) => updateUserForm('role', event.target.value)}>
@@ -1993,6 +2187,11 @@ export const AdminDashboard = () => {
                       </small>
                     )}
                     {user.role === 'consultant' && user.specialty && <small>{user.specialty}</small>}
+                    {user.role === 'consultant' && (
+                      <small>
+                        Fee: {formatMoney(user.consultationFee || 0)} / Requested {formatMoney(user.requestedConsultationFee || 0)}
+                      </small>
+                    )}
                   </span>
                   <span>
                     <select
@@ -2017,6 +2216,20 @@ export const AdminDashboard = () => {
                   </span>
                   <span>{user.ownedCourses?.length || 0}</span>
                   <span className="admin-grant-control">
+                    {user.role === 'consultant' && user.consultationFeeStatus === 'pending' && (
+                      <button
+                        className="button ghost small"
+                        type="button"
+                        onClick={() =>
+                          updateUser(user, {
+                            requestedConsultationFee: user.requestedConsultationFee,
+                            consultationFeeStatus: 'approved'
+                          })
+                        }
+                      >
+                        Approve Fee
+                      </button>
+                    )}
                     <select value={grant.courseId || ''} onChange={(event) => setGrant(user._id, 'courseId', event.target.value)}>
                       <option value="">Course</option>
                       {serverCourses.map((course) => (
@@ -2045,6 +2258,122 @@ export const AdminDashboard = () => {
               );
             })}
             {(users.users || []).length === 0 && <p className="admin-empty">No users match the current filters.</p>}
+          </div>
+        </section>
+
+        <section className="dashboard-section admin-section" id="finance">
+          <header className="admin-section-header">
+            <div>
+              <h2>
+                <CreditCard size={20} /> Revenue settlement
+              </h2>
+              <span>{earnings.length} earnings / {expenses.length} expenses</span>
+            </div>
+          </header>
+
+          <form className="admin-editor admin-user-create" onSubmit={submitExpense}>
+            <div className="admin-editor-heading">
+              <div>
+                <h3>Expense deduction</h3>
+                <span>Only unsettled or partly settled amounts reduce future net sales.</span>
+              </div>
+            </div>
+            <div className="admin-form-grid">
+              <label>
+                Title
+                <input value={expenseForm.title} onChange={(event) => updateExpenseForm('title', event.target.value)} required />
+              </label>
+              <label>
+                Category
+                <input value={expenseForm.category} onChange={(event) => updateExpenseForm('category', event.target.value)} />
+              </label>
+              <label>
+                Amount
+                <input value={expenseForm.amount} onChange={(event) => updateExpenseForm('amount', event.target.value)} type="number" min="0" step="0.01" required />
+              </label>
+              <label>
+                Already settled
+                <input value={expenseForm.settledAmount} onChange={(event) => updateExpenseForm('settledAmount', event.target.value)} type="number" min="0" step="0.01" />
+              </label>
+              <label>
+                Status
+                <select value={expenseForm.settlementStatus} onChange={(event) => updateExpenseForm('settlementStatus', event.target.value)}>
+                  {['unsettled', 'part_settled', 'settled'].map((status) => (
+                    <option value={status} key={status}>{statusLabel(status)}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Currency
+                <input value={expenseForm.currency} onChange={(event) => updateExpenseForm('currency', event.target.value.toUpperCase())} maxLength={3} />
+              </label>
+              <label>
+                Period start
+                <input value={expenseForm.periodStart} onChange={(event) => updateExpenseForm('periodStart', event.target.value)} type="date" />
+              </label>
+              <label>
+                Period end
+                <input value={expenseForm.periodEnd} onChange={(event) => updateExpenseForm('periodEnd', event.target.value)} type="date" />
+              </label>
+              <label className="admin-wide">
+                Notes
+                <textarea value={expenseForm.notes} onChange={(event) => updateExpenseForm('notes', event.target.value)} />
+              </label>
+            </div>
+            <button className="button primary small" type="submit" disabled={busyAction === 'expense-save'}>
+              <Save size={16} />
+              {isServerRecord(expenseForm.id) ? 'Update Expense' : 'Record Expense'}
+            </button>
+          </form>
+
+          <div className="admin-table payments-table">
+            <div className="admin-table-row admin-table-head">
+              <span>Expense</span>
+              <span>Amount</span>
+              <span>Settled</span>
+              <span>Period</span>
+              <span>Status</span>
+            </div>
+            {expenses.map((expense) => (
+              <div className="admin-table-row" key={expense._id}>
+                <span>
+                  <strong>{expense.title}</strong>
+                  <small>{expense.category}</small>
+                </span>
+                <span>{formatMoney(expense.amount, expense.currency)}</span>
+                <span>{formatMoney(expense.settledAmount, expense.currency)}</span>
+                <span>{expense.periodStart ? formatDate(expense.periodStart) : 'Any period'}</span>
+                <span>
+                  <button className="button ghost small" type="button" onClick={() => editExpense(expense)}>
+                    {statusLabel(expense.settlementStatus)}
+                  </button>
+                </span>
+              </div>
+            ))}
+            {!expenses.length && <p className="admin-empty">No settlement expenses recorded.</p>}
+          </div>
+
+          <div className="admin-table payments-table">
+            <div className="admin-table-row admin-table-head">
+              <span>Earner</span>
+              <span>Source</span>
+              <span>Net basis</span>
+              <span>Share</span>
+              <span>Status</span>
+            </div>
+            {earnings.map((earning) => (
+              <div className="admin-table-row" key={earning._id}>
+                <span>
+                  <strong>{earning.earner?.name || 'Unknown'}</strong>
+                  <small>{earning.earner?.email}</small>
+                </span>
+                <span>{earning.sourceType}</span>
+                <span>{formatMoney(earning.netAmount, earning.currency)}</span>
+                <span>{formatMoney(earning.amount, earning.currency)}</span>
+                <span>{statusLabel(earning.status)}</span>
+              </div>
+            ))}
+            {!earnings.length && <p className="admin-empty">No earnings have been generated yet.</p>}
           </div>
         </section>
 

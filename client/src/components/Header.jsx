@@ -4,6 +4,11 @@ import { ChevronDown, LogOut, Menu, Search, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import logo from '../assets/planeforge-logo-site.png';
 
+const dashboardPath = (role) => {
+  const normalized = ['student', 'learner', 'buyer'].includes(role) ? 'user' : role || 'user';
+  return `/dashboard/${normalized}`;
+};
+
 const navItems = [
   { to: '/', label: 'Home' },
   {
@@ -28,14 +33,14 @@ const navItems = [
   },
   {
     to: '/consultations',
-    label: 'PlaneForge Consulting',
+    label: 'Consulting',
     dropdown: [
       { to: '/consultations#project-builds', label: 'PCB Project Builds' },
       { to: '/consultations#research', label: 'Research & Feasibility' },
       { to: '/consultations#implementation', label: 'Implementation Support' }
     ]
   },
-  { to: '/about', label: 'About Us' },
+  { to: '/about', label: 'About' },
   { to: '/blog', label: 'Blog' },
   { to: '/contact', label: 'Contact' }
 ];
@@ -113,7 +118,7 @@ export const Header = () => {
           </Link>
           {user ? (
             <>
-              <Link className="button ghost small" to="/profile" onClick={close}>
+              <Link className="button ghost small" to={dashboardPath(user.role)} onClick={close}>
                 Account
               </Link>
               <button className="button primary small" type="button" onClick={signOut}>

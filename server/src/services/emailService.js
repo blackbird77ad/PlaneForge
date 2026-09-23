@@ -57,6 +57,20 @@ export const sendPasswordResetCodeEmail = ({ user, code, expiresAt }) =>
     `
   });
 
+export const sendProfileChangeCodeEmail = ({ user, code, expiresAt, changes }) =>
+  sendEmail({
+    to: user.email,
+    subject: 'Confirm your PlaneForge profile change',
+    html: `
+      <h1>Confirm profile change</h1>
+      <p>Hello ${user.name}, use this one-time code to confirm the account detail change on PlaneForge:</p>
+      <p style="font-size: 28px; font-weight: 700; letter-spacing: 6px;">${code}</p>
+      <p>Requested changes: <strong>${changes.join(', ')}</strong>.</p>
+      <p>This code expires at <strong>${expiresAt.toUTCString()}</strong>.</p>
+      <p>If you did not request this change, reset your password and contact support.</p>
+    `
+  });
+
 export const sendConsultationEmail = ({ user, consultant, consultation }) =>
   sendEmail({
     to: user.email,

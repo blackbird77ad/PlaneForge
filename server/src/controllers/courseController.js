@@ -2,7 +2,7 @@ import { Course } from '../models/Course.js';
 import { CourseComment } from '../models/CourseComment.js';
 import { User } from '../models/User.js';
 import { hasCourseAccess } from '../services/accessService.js';
-import { createDirectUploadIntent, createPlaybackGrant } from '../services/streamingService.js';
+import { createDirectUploadIntent, createPlaybackGrant, refreshMuxLessonStream } from '../services/streamingService.js';
 import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
@@ -290,6 +290,24 @@ export const createLessonStreamUpload = asyncHandler(async (req, res) => {
 
   const upload = await createDirectUploadIntent({ course, lesson });
   res.json({ upload });
+});
+
+export const refreshLessonStream = asyncHandler(async (req, res) => {
+  const course = await Course.findById(req.params.id);
+
+  if (!course) {
+    throw new ApiError(404, 'Course not found');
+  }
+
+  const module = course.modules.id(req.params.moduleId);
+  const lesson = module?.lessons.id(req.params.lessonId);
+
+  if (!module || !lesson) {
+    throw new ApiError(404, 'Lesson not found');
+  }
+
+  const stream = await refreshMuxLessonStream({ course, lesson });
+  res.json({ stream });
 });
 
 export const deleteCourse = asyncHandler(async (req, res) => {

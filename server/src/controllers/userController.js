@@ -4,11 +4,15 @@ import { CartItem } from '../models/CartItem.js';
 import { Consultation } from '../models/Consultation.js';
 import { CourseComment } from '../models/CourseComment.js';
 import { Course } from '../models/Course.js';
+import { Earning } from '../models/Earning.js';
 import { Order } from '../models/Order.js';
+import { ProfileChangeChallenge } from '../models/ProfileChangeChallenge.js';
 import { Progress } from '../models/Progress.js';
 import { Product } from '../models/Product.js';
 import { User } from '../models/User.js';
 import { hasCourseAccess } from '../services/accessService.js';
+import { sendProfileChangeCodeEmail } from '../services/emailService.js';
+import { requestEarningWithdrawal } from '../services/revenueService.js';
 import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
@@ -16,6 +20,10 @@ const accountRole = (role) => (['student', 'learner', 'buyer'].includes(role) ? 
 
 const certificateId = () =>
   `PF-CERT-${Date.now()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+
+const generateCode = () => Math.floor(100000 + Math.random() * 900000).toString();
+
+const profileChangeExpiry = () => new Date(Date.now() + 10 * 60 * 1000);
 
 const populateCart = (query) =>
   query
@@ -37,6 +45,38 @@ const findLesson = (course, lessonId) => {
 const compactString = (value, maxLength = 240) => {
   if (value == null) return '';
   return String(value).trim().slice(0, maxLength);
+};
+
+const normalizeContactNumber = (value) => compactString(value, 80);
+
+const parseDateOfBirth = (value) => {
+  const rawDate = compactString(value, 40);
+  if (!rawDate) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+    throw new ApiError(400, 'Use a valid date of birth');
+  }
+
+  const [year, month, day] = rawDate.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day ||
+    date > new Date()
+  ) {
+    throw new ApiError(400, 'Use a valid date of birth');
+  }
+
+  return date;
+};
+
+const assertFullName = (name) => {
+  const value = compactString(name, 120).replace(/\s+/g, ' ');
+  if (!value) throw new ApiError(400, 'Full name is required');
+  if (value.split(' ').filter(Boolean).length < 2) {
+    throw new ApiError(400, 'Enter your full name');
+  }
+  return value;
 };
 
 const sanitizeStringList = (value) => {
@@ -77,17 +117,19 @@ const sanitizeProfile = (profile = {}) => {
 export const updateProfile = asyncHandler(async (req, res) => {
   const updates = {};
   const body = req.body || {};
-  const lockedFields = ['email', 'contact', 'contactNumber', 'phone', 'dateOfBirth'];
+  const lockedFields = ['email'];
   const profileBody = body.profile && typeof body.profile === 'object' ? body.profile : {};
 
   if (lockedFields.some((field) => field in body || field in profileBody)) {
-    throw new ApiError(400, 'Email, contact number, and date of birth cannot be changed after sign-up');
+    throw new ApiError(400, 'Email cannot be changed from profile settings');
+  }
+
+  if (['contact', 'contactNumber', 'phone', 'dateOfBirth'].some((field) => field in body || field in profileBody)) {
+    throw new ApiError(400, 'Contact number and date of birth changes require email verification');
   }
 
   if ('name' in body) {
-    const name = compactString(body.name, 120);
-    if (!name) throw new ApiError(400, 'Name is required');
-    updates.name = name;
+    updates.name = assertFullName(body.name);
   }
   if ('avatar' in body) updates.avatar = sanitizeAvatar(body.avatar);
   if ('title' in body) updates.title = compactString(body.title, 140);
@@ -96,7 +138,16 @@ export const updateProfile = asyncHandler(async (req, res) => {
   if ('qualifications' in body) updates.qualifications = sanitizeStringList(body.qualifications);
   if ('experienceYears' in body) updates.experienceYears = Math.max(0, Number(body.experienceYears || 0));
   if ('consultationFee' in body && ['consultant', 'admin'].includes(req.user.role)) {
-    updates.consultationFee = Math.max(0, Number(body.consultationFee || 0));
+    const requestedFee = Math.max(0, Number(body.consultationFee || 0));
+    if (req.user.role === 'admin') {
+      updates.consultationFee = requestedFee;
+      updates.requestedConsultationFee = requestedFee;
+      updates.consultationFeeStatus = 'approved';
+      updates.consultationFeeReviewedAt = new Date();
+    } else {
+      updates.requestedConsultationFee = requestedFee;
+      updates.consultationFeeStatus = 'pending';
+    }
   }
   if ('languages' in body) updates.languages = sanitizeStringList(body.languages);
   if ('profile' in body) {
@@ -115,6 +166,98 @@ export const updateProfile = asyncHandler(async (req, res) => {
   }).select('-passwordHash');
 
   res.json({ user });
+});
+
+export const requestProfileChange = asyncHandler(async (req, res) => {
+  const body = req.body || {};
+  const contactNumber = 'contactNumber' in body ? normalizeContactNumber(body.contactNumber) : undefined;
+  const dateOfBirth = 'dateOfBirth' in body ? parseDateOfBirth(body.dateOfBirth) : undefined;
+  const updates = {};
+  const changes = [];
+
+  if (contactNumber !== undefined && contactNumber !== (req.user.contactNumber || '')) {
+    if (!contactNumber) throw new ApiError(400, 'Contact number is required');
+    updates.contactNumber = contactNumber;
+    changes.push('contact number');
+  }
+
+  if (dateOfBirth !== undefined) {
+    const current = req.user.dateOfBirth ? new Date(req.user.dateOfBirth).toISOString().slice(0, 10) : '';
+    const next = dateOfBirth ? dateOfBirth.toISOString().slice(0, 10) : '';
+    if (next && next !== current) {
+      updates.dateOfBirth = dateOfBirth;
+      changes.push('date of birth');
+    }
+  }
+
+  if (!changes.length) {
+    throw new ApiError(400, 'Enter a new contact number or date of birth to verify');
+  }
+
+  const code = generateCode();
+  const expiresAt = profileChangeExpiry();
+
+  await ProfileChangeChallenge.updateMany(
+    { user: req.user._id, consumedAt: { $exists: false } },
+    { $set: { consumedAt: new Date() } }
+  );
+
+  const challenge = await ProfileChangeChallenge.create({
+    user: req.user._id,
+    codeHash: ProfileChangeChallenge.hashCode(code),
+    contactNumber: updates.contactNumber,
+    dateOfBirth: updates.dateOfBirth,
+    expiresAt
+  });
+
+  await sendProfileChangeCodeEmail({ user: req.user, code, expiresAt, changes });
+
+  res.status(202).json({
+    message: 'Check your email for a verification code to confirm this profile change.',
+    challengeId: challenge._id,
+    expiresAt,
+    changes
+  });
+});
+
+export const confirmProfileChange = asyncHandler(async (req, res) => {
+  const { challengeId, code } = req.body || {};
+  if (!challengeId || !code) {
+    throw new ApiError(400, 'Challenge id and verification code are required');
+  }
+
+  const challenge = await ProfileChangeChallenge.findOne({
+    _id: challengeId,
+    user: req.user._id,
+    consumedAt: { $exists: false },
+    expiresAt: { $gt: new Date() }
+  });
+
+  if (!challenge) {
+    throw new ApiError(401, 'Verification code is invalid or has expired');
+  }
+
+  if (challenge.attempts >= challenge.maxAttempts) {
+    throw new ApiError(429, 'Too many attempts. Request a new verification code.');
+  }
+
+  if (!challenge.compareCode(code)) {
+    challenge.attempts += 1;
+    await challenge.save();
+    throw new ApiError(401, 'Verification code is incorrect');
+  }
+
+  const updates = {};
+  if (challenge.contactNumber) updates.contactNumber = challenge.contactNumber;
+  if (challenge.dateOfBirth) updates.dateOfBirth = challenge.dateOfBirth;
+  challenge.consumedAt = new Date();
+
+  const [user] = await Promise.all([
+    User.findByIdAndUpdate(req.user._id, updates, { new: true, runValidators: true }).select('-passwordHash'),
+    challenge.save()
+  ]);
+
+  res.json({ message: 'Profile security details updated.', user });
 });
 
 export const dashboard = asyncHandler(async (req, res) => {
@@ -138,19 +281,29 @@ export const dashboard = asyncHandler(async (req, res) => {
   }
 
   if (req.user.role === 'consultant') {
-    const consultations = await Consultation.find({ consultant: req.user._id })
-      .populate('student', 'name email avatar')
-      .sort({ scheduledAt: 1 });
+    const [consultations, earnings] = await Promise.all([
+      Consultation.find({ consultant: req.user._id })
+        .populate('student', 'name email avatar')
+        .sort({ scheduledAt: 1 }),
+      Earning.find({ earner: req.user._id }).sort({ createdAt: -1 })
+    ]);
 
     return res.json({
       role: 'consultant',
       consultations,
-      earnings: consultations.reduce((sum, item) => sum + item.amount, 0)
+      earnings,
+      confirmedRevenue: consultations.reduce((sum, item) => sum + item.amount, 0),
+      availableEarnings: earnings
+        .filter((earning) => earning.status === 'available')
+        .reduce((sum, earning) => sum + Number(earning.amount || 0), 0)
     });
   }
 
   if (req.user.role === 'partner') {
-    const orders = await Order.find().populate('course', 'title price');
+    const [orders, earnings] = await Promise.all([
+      Order.find().populate('course', 'title price'),
+      Earning.find({ earner: req.user._id }).sort({ createdAt: -1 })
+    ]);
     const commissionRate = Number(req.user.commissionRate || 0);
 
     return res.json({
@@ -160,11 +313,33 @@ export const dashboard = asyncHandler(async (req, res) => {
       siteOrders: orders.length,
       paidOrders: orders.filter((order) => order.status === 'paid').length,
       estimatedCommission: orders.reduce((sum, item) => sum + item.amount * (commissionRate / 100), 0),
+      earnings,
+      availableEarnings: earnings
+        .filter((earning) => earning.status === 'available')
+        .reduce((sum, earning) => sum + Number(earning.amount || 0), 0),
       resources: ['Course bundles', 'Enterprise training proposal template', 'Consultation package overview']
     });
   }
 
   throw new ApiError(403, 'Use the admin dashboard endpoint for administrator data');
+});
+
+export const listMyEarnings = asyncHandler(async (req, res) => {
+  const earnings = await Earning.find({ earner: req.user._id })
+    .populate('order', 'invoiceNumber itemType amount currency status')
+    .populate('consultation', 'service amount currency status')
+    .sort({ createdAt: -1 });
+
+  res.json({ earnings });
+});
+
+export const withdrawEarning = asyncHandler(async (req, res) => {
+  const earning = await requestEarningWithdrawal({ user: req.user, earningId: req.params.id });
+  if (!earning) {
+    throw new ApiError(404, 'Available earning not found');
+  }
+
+  res.json({ earning });
 });
 
 export const listCartItems = asyncHandler(async (req, res) => {

@@ -14,6 +14,8 @@ export const createPayment = async ({
   currency = 'USD',
   description,
   email,
+  successUrl,
+  cancelUrl,
   metadata = {}
 }) => {
   const normalizedProvider = provider || 'mock';
@@ -39,20 +41,38 @@ export const createPayment = async ({
       throw new ApiError(400, 'Stripe is not configured');
     }
 
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: toCents(amount),
-      currency: currency.toLowerCase(),
-      description,
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      customer_email: email,
+      success_url: successUrl || `${env.clientUrl}/checkout/complete`,
+      cancel_url: cancelUrl || env.clientUrl,
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: currency.toLowerCase(),
+            unit_amount: toCents(amount),
+            product_data: {
+              name: description || 'PlaneForge payment'
+            }
+          }
+        }
+      ],
+      payment_intent_data: {
+        description,
+        metadata
+      },
       metadata
     });
 
     return {
       provider: 'stripe',
       status: 'payment_initialized',
-      paymentRef: paymentIntent.id,
+      paymentRef: session.id,
       amount,
       currency,
-      clientSecret: paymentIntent.client_secret,
+      checkoutUrl: session.url,
+      checkoutSessionId: session.id,
       verificationRequired: true
     };
   }

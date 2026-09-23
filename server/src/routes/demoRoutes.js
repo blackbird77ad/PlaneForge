@@ -3,13 +3,13 @@ import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import slugify from 'slugify';
 import { env } from '../config/env.js';
+import { sendLoginCodeEmail, sendPasswordResetCodeEmail } from '../services/emailService.js';
 import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 export const demoRoutes = Router();
 
 const demoPassword = 'Password123!';
-const demoCode = '123456';
 const demoAdminSetupCode = env.auth.adminSetupCode || 'PLANEFORGE-ADMIN-2026';
 
 const roles = ['user', 'student', 'consultant', 'partner', 'admin'];
@@ -24,10 +24,33 @@ const productStatuses = ['draft', 'published', 'archived'];
 const productTypes = ['physical', 'digital'];
 
 const id = () => crypto.randomBytes(12).toString('hex');
+const code = () => crypto.randomInt(100000, 1000000).toString();
 const now = () => new Date();
 const iso = (date = now()) => date.toISOString();
 const future = (days) => new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 const clone = (value) => JSON.parse(JSON.stringify(value));
+
+const muxAuthHeader = () => {
+  if (!env.streaming.mux.tokenId || !env.streaming.mux.tokenSecret) {
+    throw new ApiError(503, 'Mux credentials are not configured');
+  }
+
+  return `Basic ${Buffer.from(`${env.streaming.mux.tokenId}:${env.streaming.mux.tokenSecret}`).toString('base64')}`;
+};
+
+const muxRequest = async (path, options = {}) => {
+  const response = await fetch(`https://api.mux.com/video/v1${path}`, {
+    ...options,
+    headers: {
+      Authorization: muxAuthHeader(),
+      'Content-Type': 'application/json',
+      ...(options.headers || {})
+    }
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new ApiError(response.status, data.error?.message || 'Mux request failed');
+  return data.data || data;
+};
 
 const makeSlug = (value) => slugify(value || `record-${Date.now()}`, { lower: true, strict: true });
 
@@ -62,11 +85,15 @@ const publicUser = (user) => ({
   qualifications: user.qualifications || [],
   experienceYears: user.experienceYears || 0,
   consultationFee: user.consultationFee || 0,
+  requestedConsultationFee: user.requestedConsultationFee || 0,
+  consultationFeeStatus: user.consultationFeeStatus || 'not_requested',
   languages: user.languages || ['English'],
   availability: user.availability || [],
   ownedCourses: user.ownedCourses || [],
   partnerCode: user.partnerCode,
   commissionRate: user.commissionRate || 0,
+  revenueShare: user.revenueShare || {},
+  stripeConnectAccountId: user.stripeConnectAccountId,
   profile: user.profile || {},
   createdAt: user.createdAt,
   updatedAt: user.updatedAt,
@@ -190,6 +217,8 @@ const users = [
     qualifications: ['PCB Design', 'Embedded Hardware', 'DFM Review', 'Board Bring-Up'],
     experienceYears: 14,
     consultationFee: 250,
+    requestedConsultationFee: 250,
+    consultationFeeStatus: 'approved',
     languages: ['English'],
     availability: [
       { day: 'Tuesday', slots: ['10:00', '14:00'] },
@@ -211,6 +240,7 @@ const users = [
     title: 'Training Partnerships Lead',
     partnerCode: 'PF-PARTNER-NORA',
     commissionRate: 8,
+    revenueShare: { shareType: 'percentage', shareValue: 8, basedOn: 'net', vestingEnabled: false },
     ownedCourses: [],
     profile: {}
   }, 14),
@@ -638,6 +668,23 @@ let settings = [
   }, 7)
 ];
 
+let expenses = [
+  withDates({
+    _id: id(),
+    title: 'September fulfillment reserve',
+    category: 'fulfillment',
+    amount: 120,
+    currency: 'USD',
+    settledAmount: 40,
+    settlementStatus: 'part_settled',
+    periodStart: '2026-09-01',
+    periodEnd: '2026-09-30',
+    notes: 'Part settlement means only the open balance reduces future net sales.'
+  }, 2)
+];
+
+let earnings = [];
+
 let newsletterSubscriptions = [
   withDates({ _id: id(), email: 'maya.okafor@example.com', source: 'course_launch', status: 'active' }, 11),
   withDates({ _id: id(), email: 'ops@bridgeworks.example', source: 'enterprise_training', status: 'active' }, 9)
@@ -646,6 +693,7 @@ let newsletterSubscriptions = [
 let certificates = [];
 const loginChallenges = new Map();
 const resetChallenges = new Map();
+const profileChangeChallenges = new Map();
 const sessions = new Map();
 
 const findUser = (userId) => users.find((user) => user._id === userId);
@@ -660,6 +708,60 @@ const hasCourseAccess = (user, courseId) =>
       user?.ownedCourses?.includes(courseId) ||
       enrollments.find((enrollment) => enrollment.user === user?._id && enrollment.course === courseId && isActiveEnrollment(enrollment))
   );
+
+const money = (value) => Math.max(0, Math.round(Number(value || 0) * 100) / 100);
+
+const settleDemoExpenses = ({ amount, currency = 'USD' }) => {
+  let remaining = money(amount);
+  let settled = 0;
+  for (const expense of expenses) {
+    if (remaining <= 0) break;
+    if (expense.currency !== currency || expense.settlementStatus === 'settled') continue;
+    const open = money(Number(expense.amount || 0) - Number(expense.settledAmount || 0));
+    if (open <= 0) continue;
+    const applied = Math.min(open, remaining);
+    expense.settledAmount = money(Number(expense.settledAmount || 0) + applied);
+    expense.settlementStatus = expense.settledAmount >= Number(expense.amount || 0) ? 'settled' : 'part_settled';
+    if (expense.settlementStatus === 'settled') expense.settledAt = iso();
+    expense.updatedAt = iso();
+    remaining = money(remaining - applied);
+    settled = money(settled + applied);
+  }
+  return settled;
+};
+
+const createDemoOrderEarnings = (order) => {
+  if (!order || order.status !== 'paid') return;
+  const grossAmount = money(order.amount);
+  const expenseAmount = settleDemoExpenses({ amount: grossAmount, currency: order.currency || 'USD' });
+  const netAmount = money(grossAmount - expenseAmount);
+  users
+    .filter((user) => ['partner', 'admin'].includes(user.role) && user.status === 'active')
+    .forEach((user) => {
+      const share = user.revenueShare || {};
+      const shareValue = Number(share.shareValue ?? (user.role === 'partner' ? user.commissionRate : 0) ?? 0);
+      if (shareValue <= 0 || earnings.some((earning) => earning.order === order._id && earning.earner === user._id)) return;
+      const base = share.basedOn === 'gross' ? grossAmount : netAmount;
+      const amount = money((share.shareType || 'percentage') === 'fixed' ? shareValue : base * (shareValue / 100));
+      if (amount <= 0) return;
+      earnings.unshift(withDates({
+        _id: id(),
+        earner: user._id,
+        role: user.role,
+        sourceType: 'order',
+        order: order._id,
+        grossAmount,
+        expenseAmount,
+        netAmount,
+        shareType: share.shareType || 'percentage',
+        shareValue,
+        amount,
+        currency: order.currency || 'USD',
+        vestingEnabled: Boolean(share.vestingEnabled),
+        status: share.vestingEnabled ? 'pending' : 'available'
+      }));
+    });
+};
 
 const populateOrder = (order) => ({
   ...order,
@@ -939,6 +1041,7 @@ const completeOrder = (order, status = 'paid') => {
       item.convertedAt = iso();
       item.updatedAt = iso();
     });
+  createDemoOrderEarnings(order);
   order.updatedAt = iso();
   return order;
 };
@@ -984,27 +1087,29 @@ const demoAllowRoles = (...allowedRoles) => (req, res, next) => {
   next();
 };
 
-const startLoginChallenge = ({ user, req }) => {
+const startLoginChallenge = async ({ user, req }) => {
   const deviceId = getDeviceId(req);
   if (!deviceId) throw new ApiError(400, 'A device id is required to start a secure login');
 
   const challengeId = id();
   const expiresAt = future(0.007);
+  const loginCode = code();
   loginChallenges.set(challengeId, {
     challengeId,
     userId: user._id,
-    code: demoCode,
+    code: loginCode,
     deviceId,
     expiresAt
   });
 
+  await sendLoginCodeEmail({ user, code: loginCode, expiresAt });
+
   return {
-    message: 'Demo login code ready.',
+    message: 'Check your email for a PlaneForge login code.',
     requiresVerification: true,
     challengeId,
     expiresAt,
-    tokenTtlDays: env.auth.sessionTtlDays,
-    devCode: demoCode
+    tokenTtlDays: env.auth.sessionTtlDays
   };
 };
 
@@ -1022,9 +1127,12 @@ demoRoutes.post('/auth/register', asyncHandler(async (req, res) => {
   const normalizedRole = normalizeRole(role);
   const normalizedContactNumber = normalizeContactNumber(contactNumber);
 
-  if (!name || !email || !normalizedContactNumber || !password) {
+  const normalizedName = compactString(name, 120).replace(/\s+/g, ' ');
+
+  if (!normalizedName || !email || !normalizedContactNumber || !password) {
     throw new ApiError(400, 'Name, email, contact number and password are required');
   }
+  if (normalizedName.split(' ').filter(Boolean).length < 2) throw new ApiError(400, 'Enter your full name');
   if (password.length < 8) throw new ApiError(400, 'Use at least 8 characters for the password');
   if (!['user', 'consultant', 'partner', 'admin'].includes(normalizedRole)) {
     throw new ApiError(400, 'Registration is available for users, consultants, partners, and administrators');
@@ -1038,7 +1146,7 @@ demoRoutes.post('/auth/register', asyncHandler(async (req, res) => {
 
   const user = withDates({
     _id: id(),
-    name: name.trim(),
+    name: normalizedName,
     email: email.trim().toLowerCase(),
     contactNumber: normalizedContactNumber,
     dateOfBirth: parseDateOfBirth(dateOfBirth),
@@ -1059,7 +1167,7 @@ demoRoutes.post('/auth/register', asyncHandler(async (req, res) => {
     });
   }
 
-  res.status(201).json(startLoginChallenge({ user, req }));
+  res.status(201).json(await startLoginChallenge({ user, req }));
 }));
 
 demoRoutes.post('/auth/login', asyncHandler(async (req, res) => {
@@ -1076,7 +1184,7 @@ demoRoutes.post('/auth/login', asyncHandler(async (req, res) => {
     throw new ApiError(401, `This account is not registered as ${expectedRole}`);
   }
 
-  res.json(startLoginChallenge({ user, req }));
+  res.json(await startLoginChallenge({ user, req }));
 }));
 
 demoRoutes.post('/auth/verify-login', asyncHandler(async (req, res) => {
@@ -1127,17 +1235,19 @@ demoRoutes.post('/auth/password-reset/request', asyncHandler(async (req, res) =>
     if (accessRole(user.role) !== expectedRole) throw new ApiError(401, `This account is not registered as ${expectedRole}`);
 
     const challengeId = id();
+    const resetCode = code();
+    const expiresAt = future(0.007);
     resetChallenges.set(challengeId, {
       challengeId,
       userId: user._id,
-      code: demoCode,
-      expiresAt: future(0.007)
+      code: resetCode,
+      expiresAt
     });
+    await sendPasswordResetCodeEmail({ user, code: resetCode, expiresAt });
   }
 
   res.json({
-    message: 'If that account exists, a password reset code has been sent.',
-    devCode: demoCode
+    message: 'If that account exists, a password reset code has been sent.'
   });
 }));
 
@@ -1180,6 +1290,23 @@ demoRoutes.get('/auth/me', demoProtect, (req, res) => {
   res.json({
     user: publicUser(req.user),
     session: req.authSession
+  });
+});
+
+demoRoutes.post('/media/images', demoProtect, (req, res) => {
+  const data = String(req.body?.data || req.body?.image || '').trim();
+  if (!data) throw new ApiError(400, 'Image data is required');
+  if (!/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(data) && !/^https?:\/\//i.test(data)) {
+    throw new ApiError(400, 'Provide an image data URL or an existing image URL');
+  }
+
+  res.status(201).json({
+    asset: {
+      url: data,
+      secureUrl: data,
+      publicId: `demo-image-${id()}`,
+      resourceType: 'image'
+    }
   });
 });
 
@@ -1233,12 +1360,26 @@ demoRoutes.get('/courses/:slug/lessons/:lessonId/playback', demoProtect, (req, r
     throw new ApiError(403, 'Purchase this course to stream this lesson');
   }
 
+  const stream = match.lesson.stream || {};
+  if (stream.provider === 'mux' && stream.status === 'ready' && stream.playbackId) {
+    return res.json({
+      playback: {
+        provider: 'mux',
+        status: 'ready',
+        configured: true,
+        playbackId: stream.playbackId,
+        playbackUrl: `https://stream.mux.com/${stream.playbackId}.m3u8`,
+        dataEnvironmentKey: env.streaming.mux.dataEnvironmentKey
+      }
+    });
+  }
+
   res.json({
     playback: {
-      provider: match.lesson.stream?.provider || 'unconfigured',
-      status: match.lesson.stream?.status || 'not_uploaded',
+      provider: stream.provider || 'unconfigured',
+      status: stream.status || 'not_uploaded',
       configured: false,
-      message: 'Demo playback is ready for access checks; connect a stream provider for real lesson video.'
+      message: stream.status === 'processing' ? 'Mux is still processing this lesson.' : 'This lesson stream is not ready yet.'
     }
   });
 });
@@ -1355,29 +1496,86 @@ demoRoutes.patch('/courses/:id', demoProtect, demoAllowRoles('admin'), (req, res
   res.json({ course: clone(course) });
 });
 
-demoRoutes.post('/courses/:id/modules/:moduleId/lessons/:lessonId/stream-upload', demoProtect, demoAllowRoles('admin'), (req, res) => {
+demoRoutes.post('/courses/:id/modules/:moduleId/lessons/:lessonId/stream-upload', demoProtect, demoAllowRoles('admin'), asyncHandler(async (req, res) => {
   const course = findCourse(req.params.id);
   if (!course) throw new ApiError(404, 'Course not found');
   const match = findLesson(course, req.params.lessonId);
   if (!match || match.module._id !== req.params.moduleId) throw new ApiError(404, 'Lesson not found');
+  const provider = match.lesson.stream?.provider || env.streaming.provider;
+
+  if (provider !== 'mux') {
+    return res.json({
+      upload: {
+        provider,
+        courseId: course._id,
+        lessonId: match.lesson._id,
+        directUploadUrl: null,
+        message: 'Set this lesson provider to Mux before creating an upload URL.'
+      }
+    });
+  }
+
+  const upload = await muxRequest('/uploads', {
+    method: 'POST',
+    body: JSON.stringify({
+      cors_origin: '*',
+      new_asset_settings: {
+        playback_policy: ['public'],
+        passthrough: JSON.stringify({ courseId: course._id, lessonId: match.lesson._id })
+      }
+    })
+  });
 
   match.lesson.stream = {
     ...match.lesson.stream,
-    provider: 'cloudflare',
+    provider: 'mux',
     status: 'uploading',
-    uploadId: `demo-upload-${id()}`
+    uploadId: upload.id,
+    signedPlaybackRequired: false
   };
 
   res.json({
     upload: {
-      provider: 'demo',
+      provider: 'mux',
       courseId: course._id,
       lessonId: match.lesson._id,
-      directUploadUrl: null,
-      message: 'Demo upload intent prepared. Configure Cloudflare credentials for real direct uploads.'
+      uploadId: upload.id,
+      directUploadUrl: upload.url,
+      message: 'Mux upload URL created. Choose a video file to upload directly to Mux.'
     }
   });
-});
+}));
+
+demoRoutes.post('/courses/:id/modules/:moduleId/lessons/:lessonId/stream-refresh', demoProtect, demoAllowRoles('admin'), asyncHandler(async (req, res) => {
+  const course = findCourse(req.params.id);
+  if (!course) throw new ApiError(404, 'Course not found');
+  const match = findLesson(course, req.params.lessonId);
+  if (!match || match.module._id !== req.params.moduleId) throw new ApiError(404, 'Lesson not found');
+  const uploadId = match.lesson.stream?.uploadId;
+  if (!uploadId) throw new ApiError(400, 'This lesson does not have a Mux upload id yet');
+
+  const upload = await muxRequest(`/uploads/${uploadId}`);
+  match.lesson.stream.status = upload.asset_id ? 'processing' : match.lesson.stream.status || 'uploading';
+  if (upload.asset_id) {
+    const asset = await muxRequest(`/assets/${upload.asset_id}`);
+    match.lesson.stream.assetId = asset.id;
+    match.lesson.stream.playbackId = asset.playback_ids?.[0]?.id || match.lesson.stream.playbackId;
+    match.lesson.stream.status = asset.status === 'ready' ? 'ready' : asset.status === 'errored' ? 'failed' : 'processing';
+  }
+
+  res.json({
+    stream: {
+      ...match.lesson.stream,
+      provider: 'mux',
+      courseId: course._id,
+      lessonId: match.lesson._id,
+      message:
+        match.lesson.stream.status === 'ready'
+          ? 'Mux asset is ready for learner playback.'
+          : 'Mux is still processing this lesson.'
+    }
+  });
+}));
 
 demoRoutes.delete('/courses/:id', demoProtect, demoAllowRoles('admin'), (req, res) => {
   const course = findCourse(req.params.id);
@@ -1619,15 +1817,21 @@ demoRoutes.get('/users/dashboard', demoProtect, (req, res) => {
 
   if (req.user.role === 'consultant') {
     const items = consultations.filter((consultation) => consultation.consultant === req.user._id);
+    const myEarnings = earnings.filter((earning) => earning.earner === req.user._id);
     return res.json({
       role: 'consultant',
       consultations: items.map(populateConsultation),
-      earnings: items.reduce((sum, item) => sum + Number(item.amount || 0), 0)
+      earnings: myEarnings,
+      confirmedRevenue: items.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+      availableEarnings: myEarnings
+        .filter((earning) => earning.status === 'available')
+        .reduce((sum, earning) => sum + Number(earning.amount || 0), 0)
     });
   }
 
   if (req.user.role === 'partner') {
     const commissionRate = Number(req.user.commissionRate || 0);
+    const myEarnings = earnings.filter((earning) => earning.earner === req.user._id);
     return res.json({
       role: 'partner',
       partnerCode: req.user.partnerCode,
@@ -1635,6 +1839,10 @@ demoRoutes.get('/users/dashboard', demoProtect, (req, res) => {
       siteOrders: orders.length,
       paidOrders: orders.filter((order) => order.status === 'paid').length,
       estimatedCommission: orders.reduce((sum, item) => sum + Number(item.amount || 0) * (commissionRate / 100), 0),
+      earnings: myEarnings,
+      availableEarnings: myEarnings
+        .filter((earning) => earning.status === 'available')
+        .reduce((sum, earning) => sum + Number(earning.amount || 0), 0),
       resources: ['Course bundles', 'Enterprise training proposal template', 'Consultation package overview']
     });
   }
@@ -1710,16 +1918,20 @@ demoRoutes.delete('/users/cart/:id', demoProtect, (req, res) => {
 
 demoRoutes.patch('/users/profile', demoProtect, (req, res) => {
   const body = req.body || {};
-  const lockedFields = ['email', 'contact', 'contactNumber', 'phone', 'dateOfBirth'];
+  const lockedFields = ['email'];
   const profileBody = body.profile && typeof body.profile === 'object' ? body.profile : {};
 
   if (lockedFields.some((field) => field in body || field in profileBody)) {
-    throw new ApiError(400, 'Email, contact number, and date of birth cannot be changed after sign-up');
+    throw new ApiError(400, 'Email cannot be changed from profile settings');
+  }
+
+  if (['contact', 'contactNumber', 'phone', 'dateOfBirth'].some((field) => field in body || field in profileBody)) {
+    throw new ApiError(400, 'Contact number and date of birth changes require email verification');
   }
 
   if ('name' in body) {
-    const name = compactString(body.name, 120);
-    if (!name) throw new ApiError(400, 'Name is required');
+    const name = compactString(body.name, 120).replace(/\s+/g, ' ');
+    if (!name || name.split(' ').filter(Boolean).length < 2) throw new ApiError(400, 'Enter your full name');
     req.user.name = name;
   }
   if ('avatar' in body) req.user.avatar = sanitizeAvatar(body.avatar);
@@ -1737,7 +1949,16 @@ demoRoutes.patch('/users/profile', demoProtect, (req, res) => {
   }
 
   if ('consultationFee' in body && ['consultant', 'admin'].includes(req.user.role)) {
-    req.user.consultationFee = Math.max(0, Number(body.consultationFee || 0));
+    const requestedFee = Math.max(0, Number(body.consultationFee || 0));
+    if (req.user.role === 'admin') {
+      req.user.consultationFee = requestedFee;
+      req.user.requestedConsultationFee = requestedFee;
+      req.user.consultationFeeStatus = 'approved';
+      req.user.consultationFeeReviewedAt = iso();
+    } else {
+      req.user.requestedConsultationFee = requestedFee;
+      req.user.consultationFeeStatus = 'pending';
+    }
   }
   if ('availability' in body && ['consultant', 'admin'].includes(req.user.role)) {
     req.user.availability = Array.isArray(body.availability) ? body.availability : [];
@@ -1745,6 +1966,84 @@ demoRoutes.patch('/users/profile', demoProtect, (req, res) => {
 
   req.user.updatedAt = iso();
   res.json({ user: publicUser(req.user) });
+});
+
+demoRoutes.post('/users/profile/change-request', demoProtect, asyncHandler(async (req, res) => {
+  const contactNumber = 'contactNumber' in req.body ? normalizeContactNumber(req.body.contactNumber) : undefined;
+  const dateOfBirth = 'dateOfBirth' in req.body ? parseDateOfBirth(req.body.dateOfBirth) : undefined;
+  const challengeId = id();
+  const verificationCode = code();
+  const expiresAt = future(0.007);
+  const changes = [];
+  const challenge = {
+    challengeId,
+    userId: req.user._id,
+    code: verificationCode,
+    expiresAt
+  };
+
+  if (contactNumber !== undefined && contactNumber !== (req.user.contactNumber || '')) {
+    if (!contactNumber) throw new ApiError(400, 'Contact number is required');
+    challenge.contactNumber = contactNumber;
+    changes.push('contact number');
+  }
+
+  if (dateOfBirth !== undefined) {
+    const current = req.user.dateOfBirth ? new Date(req.user.dateOfBirth).toISOString().slice(0, 10) : '';
+    const next = dateOfBirth ? dateOfBirth.toISOString().slice(0, 10) : '';
+    if (next && next !== current) {
+      challenge.dateOfBirth = dateOfBirth;
+      changes.push('date of birth');
+    }
+  }
+
+  if (!changes.length) throw new ApiError(400, 'Enter a new contact number or date of birth to verify');
+
+  for (const [key, item] of profileChangeChallenges.entries()) {
+    if (item.userId === req.user._id) profileChangeChallenges.delete(key);
+  }
+
+  profileChangeChallenges.set(challengeId, challenge);
+  await sendProfileChangeCodeEmail({ user: req.user, code: verificationCode, expiresAt, changes });
+
+  res.status(202).json({
+    message: 'Check your email for a verification code to confirm this profile change.',
+    challengeId,
+    expiresAt,
+    changes
+  });
+}));
+
+demoRoutes.post('/users/profile/change-confirm', demoProtect, (req, res) => {
+  const { challengeId, code: submittedCode } = req.body || {};
+  const challenge = profileChangeChallenges.get(challengeId);
+
+  if (!challenge || challenge.userId !== req.user._id || challenge.expiresAt <= now()) {
+    throw new ApiError(401, 'Verification code is invalid or has expired');
+  }
+
+  if (challenge.code !== submittedCode) {
+    throw new ApiError(401, 'Verification code is incorrect');
+  }
+
+  if (challenge.contactNumber) req.user.contactNumber = challenge.contactNumber;
+  if (challenge.dateOfBirth) req.user.dateOfBirth = challenge.dateOfBirth;
+  req.user.updatedAt = iso();
+  profileChangeChallenges.delete(challengeId);
+
+  res.json({ message: 'Profile security details updated.', user: publicUser(req.user) });
+});
+
+demoRoutes.get('/users/earnings', demoProtect, (req, res) => {
+  res.json({ earnings: earnings.filter((earning) => earning.earner === req.user._id) });
+});
+
+demoRoutes.post('/users/earnings/:id/withdraw', demoProtect, (req, res) => {
+  const earning = earnings.find((item) => item._id === req.params.id && item.earner === req.user._id);
+  if (!earning || earning.status !== 'available') throw new ApiError(404, 'Available earning not found');
+  earning.status = 'withdrawal_requested';
+  earning.updatedAt = iso();
+  res.json({ earning });
 });
 
 const saveProgress = (req, res) => {
@@ -2057,11 +2356,15 @@ demoRoutes.patch('/admin/users/:id', (req, res) => {
   if (req.body.role) req.body.role = normalizeRole(req.body.role);
   if (req.body.role && !roles.includes(req.body.role)) throw new ApiError(400, 'Invalid user role');
   if (req.body.status && !userStatuses.includes(req.body.status)) throw new ApiError(400, 'Invalid user status');
+  if (req.body.consultationFeeStatus === 'approved') {
+    req.body.consultationFee = Number(req.body.requestedConsultationFee ?? req.body.consultationFee ?? 0);
+    req.body.consultationFeeReviewedAt = iso();
+  }
   if (user._id === req.user._id && ((req.body.role && req.body.role !== 'admin') || (req.body.status && req.body.status !== 'active'))) {
     throw new ApiError(400, 'You cannot remove your own admin access');
   }
 
-  const allowed = ['name', 'role', 'status', 'title', 'specialty', 'bio', 'consultationFee', 'languages', 'profile', 'availability', 'qualifications', 'experienceYears', 'partnerCode', 'commissionRate'];
+  const allowed = ['name', 'role', 'status', 'title', 'specialty', 'bio', 'consultationFee', 'requestedConsultationFee', 'consultationFeeStatus', 'consultationFeeReviewedAt', 'languages', 'profile', 'availability', 'qualifications', 'experienceYears', 'partnerCode', 'commissionRate', 'revenueShare', 'stripeConnectAccountId'];
   for (const key of allowed) {
     if (key in req.body) user[key] = req.body[key];
   }
@@ -2132,6 +2435,54 @@ demoRoutes.patch('/admin/consultations/:id', (req, res) => {
 
   Object.assign(consultation, req.body, { updatedAt: iso() });
   res.json({ consultation: populateConsultation(consultation) });
+});
+
+demoRoutes.get('/admin/expenses', (req, res) => {
+  res.json({ expenses: clone(expenses) });
+});
+
+demoRoutes.post('/admin/expenses', (req, res) => {
+  const amount = Math.max(0, Number(req.body.amount || 0));
+  const settledAmount = Math.min(amount, Math.max(0, Number(req.body.settledAmount || 0)));
+  const expense = withDates({
+    _id: id(),
+    title: String(req.body.title || '').trim(),
+    category: req.body.category || 'operations',
+    amount,
+    currency: req.body.currency || 'USD',
+    periodStart: req.body.periodStart || null,
+    periodEnd: req.body.periodEnd || null,
+    settledAmount,
+    settlementStatus: req.body.settlementStatus || (settledAmount >= amount ? 'settled' : settledAmount > 0 ? 'part_settled' : 'unsettled'),
+    notes: req.body.notes || '',
+    createdBy: req.user._id
+  });
+  if (!expense.title) throw new ApiError(400, 'Expense title is required');
+  expenses.unshift(expense);
+  res.status(201).json({ expense });
+});
+
+demoRoutes.patch('/admin/expenses/:id', (req, res) => {
+  const expense = expenses.find((item) => item._id === req.params.id);
+  if (!expense) throw new ApiError(404, 'Expense not found');
+  Object.assign(expense, req.body, { updatedAt: iso() });
+  expense.amount = Math.max(0, Number(expense.amount || 0));
+  expense.settledAmount = Math.min(expense.amount, Math.max(0, Number(expense.settledAmount || 0)));
+  if (!req.body.settlementStatus) {
+    expense.settlementStatus = expense.settledAmount >= expense.amount ? 'settled' : expense.settledAmount > 0 ? 'part_settled' : 'unsettled';
+  }
+  res.json({ expense });
+});
+
+demoRoutes.get('/admin/earnings', (req, res) => {
+  res.json({
+    earnings: earnings.map((earning) => ({
+      ...earning,
+      earner: publicUser(findUser(earning.earner)),
+      order: orders.find((order) => order._id === earning.order),
+      consultation: consultations.find((consultation) => consultation._id === earning.consultation)
+    }))
+  });
 });
 
 demoRoutes.get('/admin/inquiries', (req, res) => {

@@ -43,6 +43,15 @@ export const LearningPlayer = () => {
   }, [slug]);
 
   useEffect(() => {
+    if (document.querySelector('script[data-mux-player]')) return;
+    const script = document.createElement('script');
+    script.type = 'module';
+    script.src = 'https://cdn.jsdelivr.net/npm/@mux/mux-player/+esm';
+    script.dataset.muxPlayer = 'true';
+    document.head.appendChild(script);
+  }, []);
+
+  useEffect(() => {
     if (!active?.lesson?._id) return;
 
     setPlayback(null);
@@ -173,7 +182,32 @@ export const LearningPlayer = () => {
         </div>
 
         <div className="player-shell">
-          {playback?.configured && playback.playbackUrl ? (
+          {playback?.configured && playback.provider === 'mux' && playback.playbackId ? (
+            <mux-player
+              playback-id={playback.playbackId}
+              stream-type="on-demand"
+              metadata-video-title={active?.lesson?.title || course.title}
+              metadata-viewer-user-id={course.access === 'unlocked' ? 'planeforge-learner' : 'preview'}
+              env-key={playback.dataEnvironmentKey || undefined}
+              accent-color="#ff4b12"
+              style={{ width: '100%', height: '100%' }}
+              onTimeUpdate={(event) => {
+                const video = event.currentTarget;
+                if (video.currentTime - lastSyncRef.current >= 12) {
+                  lastSyncRef.current = video.currentTime;
+                  syncProgress({ currentTime: video.currentTime, duration: video.duration });
+                }
+              }}
+              onEnded={(event) => {
+                const video = event.currentTarget;
+                syncProgress({
+                  currentTime: video.duration || video.currentTime,
+                  duration: video.duration,
+                  completed: true
+                });
+              }}
+            />
+          ) : playback?.configured && playback.playbackUrl ? (
             <video
               src={playback.playbackUrl}
               controls

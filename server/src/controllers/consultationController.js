@@ -1,12 +1,17 @@
 import { Consultation } from '../models/Consultation.js';
 import { User } from '../models/User.js';
 import { createPayment } from '../services/paymentService.js';
+import { createConsultationEarning } from '../services/revenueService.js';
 import { sendConsultationEmail } from '../services/emailService.js';
 import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 export const listConsultants = asyncHandler(async (req, res) => {
-  const consultants = await User.find({ role: 'consultant', status: 'active' }).select(
+  const consultants = await User.find({
+    role: 'consultant',
+    status: 'active',
+    consultationFeeStatus: 'approved'
+  }).select(
     'name avatar title specialty bio qualifications experienceYears consultationFee languages availability'
   );
 
@@ -20,7 +25,7 @@ export const bookConsultation = asyncHandler(async (req, res) => {
     category,
     scheduledAt,
     durationMinutes = 60,
-    provider = 'mock',
+    provider = 'stripe',
     notes
   } = req.body;
 
@@ -44,6 +49,8 @@ export const bookConsultation = asyncHandler(async (req, res) => {
     amount,
     currency: 'USD',
     description: `PlaneForge consultation: ${service}`,
+    successUrl: `${env.clientUrl}/checkout/complete?consultation=true`,
+    cancelUrl: `${env.clientUrl}/consultations`,
     metadata: {
       userId: req.user._id.toString(),
       consultantId: consultant._id.toString()
@@ -66,6 +73,7 @@ export const bookConsultation = asyncHandler(async (req, res) => {
 
   if (consultation.status === 'confirmed') {
     await sendConsultationEmail({ user: req.user, consultant, consultation });
+    await createConsultationEarning({ consultation, consultant });
   }
 
   res.status(201).json({ consultation, payment });

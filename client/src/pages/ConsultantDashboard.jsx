@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, Clock, CreditCard, UserRound } from 'lucide-react';
 import { DashboardShell } from '../components/DashboardShell.jsx';
 import { MetricCard } from '../components/MetricCard.jsx';
-import { getDashboard } from '../api/client.js';
+import { getDashboard, withdrawEarning } from '../api/client.js';
+import { useAuth } from '../context/AuthContext.jsx';
 
 const fallbackSessions = [
   {
@@ -56,13 +57,26 @@ const sessionFromConsultation = (consultation) => ({
 });
 
 export const ConsultantDashboard = () => {
+  const { user } = useAuth();
   const [dashboard, setDashboard] = useState(null);
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     getDashboard().then((data) => {
       if (data?.role === 'consultant') setDashboard(data);
     });
   }, []);
+
+  const requestWithdrawal = async (earningId) => {
+    const data = await withdrawEarning(earningId);
+    setDashboard((current) => ({
+      ...current,
+      earnings: (current?.earnings || []).map((earning) =>
+        earning._id === earningId ? data.earning : earning
+      )
+    }));
+    setNotice('Withdrawal request recorded.');
+  };
 
   const sessions = useMemo(
     () =>
@@ -72,7 +86,7 @@ export const ConsultantDashboard = () => {
     [dashboard]
   );
   const earnings =
-    dashboard?.earnings ??
+    dashboard?.confirmedRevenue ??
     sessions
       .filter((session) => ['confirmed', 'completed'].includes(session.status))
       .reduce((sum, session) => sum + Number(session.amount || 0), 0);
@@ -82,8 +96,9 @@ export const ConsultantDashboard = () => {
       <div className="metric-grid">
         <MetricCard label="Requests" value={sessions.length} detail="Bookings and inquiries" />
         <MetricCard label="Confirmed revenue" value={formatMoney(earnings)} detail="Consulting payments" />
+        <MetricCard label="Available earnings" value={formatMoney(dashboard?.availableEarnings)} detail="Ready to withdraw" />
         <MetricCard label="Open follow-ups" value={sessions.filter((session) => session.status === 'pending').length} detail="Needs action" />
-        <MetricCard label="Response target" value="24h" detail="Client follow-up" />
+        <MetricCard label="Fee status" value={user?.consultationFeeStatus || 'not set'} detail={user?.requestedConsultationFee ? formatMoney(user.requestedConsultationFee) : 'Submit in profile'} />
       </div>
 
       <section className="dashboard-section">
@@ -107,6 +122,30 @@ export const ConsultantDashboard = () => {
             </article>
           ))}
         </div>
+      </section>
+      <section className="dashboard-section">
+        <h2>
+          <CreditCard size={20} /> Earnings
+        </h2>
+        <div className="table-list">
+          {(dashboard?.earnings || []).map((earning) => (
+            <article key={earning._id}>
+              <span>{earning.sourceType}</span>
+              <strong>{formatMoney(earning.amount, earning.currency)}</strong>
+              <span>{earning.status}</span>
+              <button
+                className="button ghost small"
+                type="button"
+                disabled={earning.status !== 'available'}
+                onClick={() => requestWithdrawal(earning._id)}
+              >
+                Withdraw
+              </button>
+            </article>
+          ))}
+          {!(dashboard?.earnings || []).length && <p className="admin-empty">No consulting earnings yet.</p>}
+        </div>
+        {notice && <p className="form-success">{notice}</p>}
       </section>
     </DashboardShell>
   );

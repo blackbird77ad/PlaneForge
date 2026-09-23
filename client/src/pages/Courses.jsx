@@ -37,12 +37,11 @@ const sameFilters = (a, b) =>
 export const Courses = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialFilters = filtersFromParams(searchParams);
-  const [initialCatalog] = useState(() => getLocalCourseResults(initialFilters));
-  const [items, setItems] = useState(initialCatalog.courses);
-  const [pagination, setPagination] = useState(initialCatalog.pagination);
+  const [items, setItems] = useState([]);
+  const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState(initialFilters);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const nextFilters = filtersFromParams(searchParams);
@@ -62,15 +61,18 @@ export const Courses = () => {
 
   useEffect(() => {
     let active = true;
-    const localData = getLocalCourseResults(filters);
-    setItems(localData.courses || []);
-    setPagination(localData.pagination || { page: 1, pages: 1, total: 0 });
     setLoading(true);
     getCourses(filters)
       .then((data) => {
         if (!active) return;
         setItems(data.courses || []);
         setPagination(data.pagination || { page: 1, pages: 1, total: data.courses?.length || 0 });
+      })
+      .catch(() => {
+        if (!active) return;
+        const localData = getLocalCourseResults(filters);
+        setItems(localData.courses || []);
+        setPagination(localData.pagination || { page: 1, pages: 1, total: 0 });
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -83,12 +85,12 @@ export const Courses = () => {
 
   const options = useMemo(
     () => ({
-      category: unique('category'),
-      discipline: unique('discipline'),
-      difficulty: unique('difficulty'),
-      language: unique('language')
+      category: Array.from(new Set([...unique('category'), ...items.map((course) => course.category)].filter(Boolean))),
+      discipline: Array.from(new Set([...unique('discipline'), ...items.map((course) => course.discipline)].filter(Boolean))),
+      difficulty: Array.from(new Set([...unique('difficulty'), ...items.map((course) => course.difficulty)].filter(Boolean))),
+      language: Array.from(new Set([...unique('language'), ...items.map((course) => course.language)].filter(Boolean)))
     }),
-    []
+    [items]
   );
 
   const update = (key, value) => setFilters((current) => ({ ...current, [key]: value, page: 1 }));

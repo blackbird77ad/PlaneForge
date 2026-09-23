@@ -35,12 +35,11 @@ const sameFilters = (a, b) =>
 export const Products = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialFilters = filtersFromParams(searchParams);
-  const [initialCatalog] = useState(() => getLocalProductResults(initialFilters));
-  const [items, setItems] = useState(initialCatalog.products);
-  const [pagination, setPagination] = useState(initialCatalog.pagination);
+  const [items, setItems] = useState([]);
+  const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState(initialFilters);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const nextFilters = filtersFromParams(searchParams);
@@ -60,15 +59,18 @@ export const Products = () => {
 
   useEffect(() => {
     let active = true;
-    const localData = getLocalProductResults(filters);
-    setItems(localData.products || []);
-    setPagination(localData.pagination || { page: 1, pages: 1, total: 0 });
     setLoading(true);
     getProducts(filters)
       .then((data) => {
         if (!active) return;
         setItems(data.products || []);
         setPagination(data.pagination || { page: 1, pages: 1, total: data.products?.length || 0 });
+      })
+      .catch(() => {
+        if (!active) return;
+        const localData = getLocalProductResults(filters);
+        setItems(localData.products || []);
+        setPagination(localData.pagination || { page: 1, pages: 1, total: 0 });
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -79,7 +81,10 @@ export const Products = () => {
     };
   }, [filters]);
 
-  const categories = useMemo(() => unique('category'), []);
+  const categories = useMemo(
+    () => Array.from(new Set([...unique('category'), ...items.map((product) => product.category)].filter(Boolean))),
+    [items]
+  );
   const update = (key, value) => setFilters((current) => ({ ...current, [key]: value, page: 1 }));
   const resetFilters = () => setFilters(defaultFilters);
   const activeFilterCount = ['category', 'type', 'price'].filter((key) => filters[key]).length;

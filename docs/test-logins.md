@@ -1,12 +1,12 @@
 # PlaneForge Test Logins
 
-For quick local testing, use the repo-root `.env` with:
+For quick local testing, run:
 
-```text
-DEMO_BACKEND=true
+```bash
+npm run dev:demo
 ```
 
-This starts the backend with in-memory demo data and does not require MongoDB.
+This starts the backend on `http://127.0.0.1:5001` with in-memory demo data and does not require MongoDB.
 
 If you switch to Mongo-backed mode, seed the database first:
 
@@ -23,9 +23,9 @@ Password123!
 | Area | Email | Notes |
 | --- | --- | --- |
 | Admin | admin@planeforge.test | Use `/admin` |
-| Learner | student@planeforge.test | Use `/login` |
+| User / buyer / learner | student@planeforge.test | Use `/login` |
 | Consultant | consultant@planeforge.test | Use `/consultant` |
-| Partner | partner@planeforge.test | Admin-created access; use `/login` |
+| Partner | partner@planeforge.test | Use `/partner` |
 
 Admin URL:
 
@@ -45,15 +45,17 @@ Consultant URL:
 http://localhost:7310/consultant
 ```
 
-The public login form does not ask visitors to choose a role. After the one-time code is verified, the account role sends the user to the correct dashboard.
-
-When `RESEND_API_KEY` is empty in local development, the API returns the one-time login code in the response and the UI shows it as a development code. If the frontend falls back to its browser-only demo login because the API is unavailable, the code is:
+Partner URL:
 
 ```text
-123456
+http://localhost:7310/partner
 ```
 
-Admin sign-up is protected by:
+The public login form does not ask visitors to choose a role. After the one-time code is verified, the account role sends the user to the correct dashboard.
+
+Login and password reset codes are emailed through Resend when `RESEND_API_KEY` is configured. Keep the local demo API running while testing auth flows so the browser does not need an offline-only fallback.
+
+Admin sign-up is protected by the current `ADMIN_SETUP_CODE` in `.env`.
 
 ```text
 PLANEFORGE-ADMIN-2026

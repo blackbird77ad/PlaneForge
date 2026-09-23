@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { KeyRound, LogIn } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
+import { PasswordField } from '../components/PasswordField.jsx';
 
 const destinationFor = (from, role) => {
   if (typeof from === 'string') return from;
@@ -66,15 +67,11 @@ export const Login = () => {
                   required
                 />
               </label>
-              <label>
-                Password
-                <input
-                  value={form.password}
-                  onChange={(event) => setForm({ ...form, password: event.target.value })}
-                  type="password"
-                  required
-                />
-              </label>
+              <PasswordField
+                value={form.password}
+                onChange={(event) => setForm({ ...form, password: event.target.value })}
+                autoComplete="current-password"
+              />
               <Link className="auth-inline-link" to="/reset-password" state={{ email: form.email }}>
                 Reset password
               </Link>
@@ -92,7 +89,6 @@ export const Login = () => {
               />
             </label>
           )}
-          {challenge?.devCode && <p className="form-success">Development code: {challenge.devCode}</p>}
           {challenge?.expiresAt && (
             <p className="form-muted">Code expires {new Date(challenge.expiresAt).toLocaleTimeString()}.</p>
           )}

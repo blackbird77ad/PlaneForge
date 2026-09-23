@@ -10,6 +10,7 @@ import { grantCourseAccess, hasCourseAccess } from '../services/accessService.js
 import { sendEnrollmentEmail } from '../services/emailService.js';
 import { createInvoice, createInvoiceNumber } from '../services/invoiceService.js';
 import { createPayment } from '../services/paymentService.js';
+import { createOrderEarnings } from '../services/revenueService.js';
 import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
@@ -101,6 +102,8 @@ const completeVerifiedOrder = async ({ order, rawPaymentEvent, source = 'payment
     }
   );
 
+  await createOrderEarnings({ order: populatedOrder });
+
   return populatedOrder;
 };
 
@@ -146,6 +149,7 @@ const webhookPaymentRef = ({ provider, event }) => {
 
   if (provider === 'stripe') {
     const object = event?.data?.object || {};
+    if (event?.type === 'checkout.session.completed') return object.id;
     return object.payment_intent || object.id;
   }
 
@@ -238,6 +242,8 @@ export const checkoutCourse = asyncHandler(async (req, res) => {
     currency: course.currency,
     email: req.user.email,
     description: `PlaneForge course: ${course.title}`,
+    successUrl: `${env.clientUrl}/checkout/complete?order=${order._id}`,
+    cancelUrl: `${env.clientUrl}/checkout/${course.slug}`,
     metadata: {
       userId: req.user._id.toString(),
       courseId: course._id.toString(),
@@ -325,6 +331,8 @@ export const checkoutProduct = asyncHandler(async (req, res) => {
     currency: product.currency,
     email: req.user.email,
     description: `PlaneForge product: ${product.title}`,
+    successUrl: `${env.clientUrl}/checkout/complete?order=${order._id}`,
+    cancelUrl: `${env.clientUrl}/checkout/product/${product.slug}`,
     metadata: {
       userId: req.user._id.toString(),
       productId: product._id.toString(),

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { BriefcaseBusiness, KeyRound, LogIn, RotateCcw, UserPlus } from 'lucide-react';
 import { PartnerDashboard } from './PartnerDashboard.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { PasswordField } from '../components/PasswordField.jsx';
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -132,7 +133,7 @@ export const PartnerAccess = () => {
     try {
       if (resetStep === 'request') {
         const data = await startPasswordReset({ email: forms.reset.email, role: 'partner' });
-        setMessage(data.devCode ? `${data.message} Development code: ${data.devCode}` : data.message);
+        setMessage(data.message);
         setResetStep('complete');
         return;
       }
@@ -220,15 +221,11 @@ export const PartnerAccess = () => {
                     required
                   />
                 </label>
-                <label>
-                  Password
-                  <input
-                    value={forms.login.password}
-                    onChange={(event) => update('login', 'password', event.target.value)}
-                    type="password"
-                    required
-                  />
-                </label>
+                <PasswordField
+                  value={forms.login.password}
+                  onChange={(event) => update('login', 'password', event.target.value)}
+                  autoComplete="current-password"
+                />
               </>
             ) : (
               <label>
@@ -242,7 +239,6 @@ export const PartnerAccess = () => {
                 />
               </label>
             )}
-            {challenge?.devCode && <p className="form-success">Development code: {challenge.devCode}</p>}
             {error && <p className="form-error">{error}</p>}
             <button className="button primary full" type="submit" disabled={busy}>
               {challenge ? <KeyRound size={18} /> : <LogIn size={18} />}
@@ -256,7 +252,7 @@ export const PartnerAccess = () => {
             {!challenge ? (
               <>
                 <label>
-                  Name
+                  Full name
                   <input
                     value={forms.signup.name}
                     onChange={(event) => update('signup', 'name', event.target.value)}
@@ -272,15 +268,11 @@ export const PartnerAccess = () => {
                     required
                   />
                 </label>
-                <label>
-                  Password
-                  <input
-                    value={forms.signup.password}
-                    onChange={(event) => update('signup', 'password', event.target.value)}
-                    type="password"
-                    required
-                  />
-                </label>
+                <PasswordField
+                  value={forms.signup.password}
+                  onChange={(event) => update('signup', 'password', event.target.value)}
+                  autoComplete="new-password"
+                />
                 <label>
                   Contact number
                   <input
@@ -313,7 +305,6 @@ export const PartnerAccess = () => {
                 />
               </label>
             )}
-            {challenge?.devCode && <p className="form-success">Development code: {challenge.devCode}</p>}
             {error && <p className="form-error">{error}</p>}
             <button className="button primary full" type="submit" disabled={busy}>
               {challenge ? <KeyRound size={18} /> : <UserPlus size={18} />}
@@ -346,24 +337,18 @@ export const PartnerAccess = () => {
                     required
                   />
                 </label>
-                <label>
-                  New password
-                  <input
-                    value={forms.reset.password}
-                    onChange={(event) => update('reset', 'password', event.target.value)}
-                    type="password"
-                    required
-                  />
-                </label>
-                <label>
-                  Confirm password
-                  <input
-                    value={forms.reset.confirmPassword}
-                    onChange={(event) => update('reset', 'confirmPassword', event.target.value)}
-                    type="password"
-                    required
-                  />
-                </label>
+                <PasswordField
+                  label="New password"
+                  value={forms.reset.password}
+                  onChange={(event) => update('reset', 'password', event.target.value)}
+                  autoComplete="new-password"
+                />
+                <PasswordField
+                  label="Confirm password"
+                  value={forms.reset.confirmPassword}
+                  onChange={(event) => update('reset', 'confirmPassword', event.target.value)}
+                  autoComplete="new-password"
+                />
               </>
             )}
             {message && <p className="form-success">{message}</p>}

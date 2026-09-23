@@ -4,14 +4,17 @@ import { Consultation } from '../models/Consultation.js';
 import { ContactInquiry } from '../models/ContactInquiry.js';
 import { Course } from '../models/Course.js';
 import { CourseComment } from '../models/CourseComment.js';
+import { Earning } from '../models/Earning.js';
 import { Enrollment } from '../models/Enrollment.js';
 import { NewsletterSubscription } from '../models/NewsletterSubscription.js';
 import { Order } from '../models/Order.js';
 import { Progress } from '../models/Progress.js';
+import { PlatformExpense } from '../models/PlatformExpense.js';
 import { Product } from '../models/Product.js';
 import { SystemSetting } from '../models/SystemSetting.js';
 import { User } from '../models/User.js';
 import { grantCourseAccess, isEnrollmentActive } from '../services/accessService.js';
+import { createOrderEarnings } from '../services/revenueService.js';
 import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
@@ -59,6 +62,15 @@ const compactString = (value, maxLength = 240) => {
 };
 
 const normalizeContactNumber = (value) => compactString(value, 80);
+
+const assertFullName = (name) => {
+  const value = compactString(name, 120).replace(/\s+/g, ' ');
+  if (!value) throw new ApiError(400, 'Full name is required');
+  if (value.split(' ').filter(Boolean).length < 2) {
+    throw new ApiError(400, 'Enter your full name');
+  }
+  return value;
+};
 
 const parseDateOfBirth = (value) => {
   const rawDate = compactString(value, 40);
@@ -305,7 +317,9 @@ export const createUser = asyncHandler(async (req, res) => {
     languages,
     profile,
     partnerCode,
-    commissionRate
+    commissionRate,
+    revenueShare,
+    stripeConnectAccountId
   } = req.body;
   const normalizedRole = normalizeUserRole(role);
   const normalizedStatus = status || 'active';
@@ -330,6 +344,7 @@ export const createUser = asyncHandler(async (req, res) => {
   }
 
   const parsedDateOfBirth = parseDateOfBirth(dateOfBirth);
+  const fullName = assertFullName(name);
 
   const existing = await User.findOne({ email: normalizedEmail });
   if (existing) {
@@ -337,7 +352,7 @@ export const createUser = asyncHandler(async (req, res) => {
   }
 
   const user = await User.create({
-    name: String(name).trim(),
+    name: fullName,
     email: normalizedEmail,
     contactNumber: normalizedContactNumber,
     dateOfBirth: parsedDateOfBirth,
@@ -351,7 +366,12 @@ export const createUser = asyncHandler(async (req, res) => {
     languages: Array.isArray(languages) && languages.length ? languages : undefined,
     profile: profile && typeof profile === 'object' ? profile : undefined,
     partnerCode: String(partnerCode || '').trim() || undefined,
-    commissionRate: Math.max(0, Number(commissionRate || 0))
+    commissionRate: Math.max(0, Number(commissionRate || 0)),
+    revenueShare: revenueShare && typeof revenueShare === 'object' ? revenueShare : undefined,
+    stripeConnectAccountId: String(stripeConnectAccountId || '').trim() || undefined,
+    consultationFeeStatus: normalizedRole === 'consultant' && Number(consultationFee || 0) > 0 ? 'approved' : undefined,
+    requestedConsultationFee: normalizedRole === 'consultant' ? Number(consultationFee || 0) : undefined,
+    consultationFeeReviewedAt: normalizedRole === 'consultant' && Number(consultationFee || 0) > 0 ? new Date() : undefined
   });
 
   const createdUser = await User.findById(user._id)
@@ -411,7 +431,11 @@ export const updateUser = asyncHandler(async (req, res) => {
     'qualifications',
     'experienceYears',
     'partnerCode',
-    'commissionRate'
+    'commissionRate',
+    'revenueShare',
+    'stripeConnectAccountId',
+    'requestedConsultationFee',
+    'consultationFeeStatus'
   ];
   const updates = {};
 
@@ -423,12 +447,21 @@ export const updateUser = asyncHandler(async (req, res) => {
     updates.role = normalizeUserRole(updates.role);
   }
 
+  if ('name' in updates) {
+    updates.name = assertFullName(updates.name);
+  }
+
   if (updates.role && !userRoles.includes(updates.role)) {
     throw new ApiError(400, 'Invalid user role');
   }
 
   if (updates.status && !userStatuses.includes(updates.status)) {
     throw new ApiError(400, 'Invalid user status');
+  }
+
+  if (updates.consultationFeeStatus === 'approved') {
+    updates.consultationFee = Number(updates.requestedConsultationFee ?? updates.consultationFee ?? 0);
+    updates.consultationFeeReviewedAt = new Date();
   }
 
   if (
@@ -450,6 +483,84 @@ export const updateUser = asyncHandler(async (req, res) => {
   }
 
   res.json({ user });
+});
+
+export const listExpenses = asyncHandler(async (req, res) => {
+  const expenses = await PlatformExpense.find().populate('createdBy', 'name email').sort({ createdAt: -1 });
+  res.json({ expenses });
+});
+
+export const createExpense = asyncHandler(async (req, res) => {
+  const {
+    title,
+    category = 'operations',
+    amount,
+    currency = 'USD',
+    periodStart,
+    periodEnd,
+    settledAmount = 0,
+    settlementStatus,
+    notes
+  } = req.body;
+
+  if (!String(title || '').trim() || Number(amount) < 0) {
+    throw new ApiError(400, 'Expense title and amount are required');
+  }
+
+  const safeAmount = Number(amount || 0);
+  const safeSettled = Math.min(safeAmount, Math.max(0, Number(settledAmount || 0)));
+  const status =
+    settlementStatus || (safeSettled >= safeAmount ? 'settled' : safeSettled > 0 ? 'part_settled' : 'unsettled');
+
+  const expense = await PlatformExpense.create({
+    title: String(title).trim(),
+    category,
+    amount: safeAmount,
+    currency,
+    periodStart: parseDate(periodStart),
+    periodEnd: parseDate(periodEnd),
+    settledAmount: safeSettled,
+    settlementStatus: status,
+    settledAt: status === 'settled' ? new Date() : undefined,
+    notes,
+    createdBy: req.user._id
+  });
+
+  res.status(201).json({ expense });
+});
+
+export const updateExpense = asyncHandler(async (req, res) => {
+  const expense = await PlatformExpense.findById(req.params.id);
+  if (!expense) throw new ApiError(404, 'Expense not found');
+
+  const allowed = ['title', 'category', 'amount', 'currency', 'periodStart', 'periodEnd', 'settledAmount', 'settlementStatus', 'notes'];
+  for (const key of allowed) {
+    if (key in req.body) expense[key] = ['periodStart', 'periodEnd'].includes(key) ? parseDate(req.body[key]) : req.body[key];
+  }
+
+  expense.settledAmount = Math.min(Number(expense.amount || 0), Math.max(0, Number(expense.settledAmount || 0)));
+  if (!req.body.settlementStatus) {
+    expense.settlementStatus =
+      expense.settledAmount >= Number(expense.amount || 0)
+        ? 'settled'
+        : expense.settledAmount > 0
+          ? 'part_settled'
+          : 'unsettled';
+  }
+  if (expense.settlementStatus === 'settled' && !expense.settledAt) expense.settledAt = new Date();
+  await expense.save();
+
+  res.json({ expense });
+});
+
+export const listEarnings = asyncHandler(async (req, res) => {
+  const earnings = await Earning.find()
+    .populate('earner', 'name email role partnerCode stripeConnectAccountId')
+    .populate('order', 'invoiceNumber itemType amount currency status')
+    .populate('consultation', 'service amount currency status')
+    .sort({ createdAt: -1 });
+
+  res.json({ earnings });
 });
 
 export const grantEnrollment = asyncHandler(async (req, res) => {
@@ -603,6 +714,9 @@ export const updatePayment = asyncHandler(async (req, res) => {
   }
 
   await order.save();
+  if (order.status === 'paid') {
+    await createOrderEarnings({ order });
+  }
 
   if (['verified', 'paid'].includes(status)) {
     const cartLookup = {
