@@ -13,8 +13,6 @@ import {
   Users
 } from 'lucide-react';
 import { addCartItem, getCourse } from '../api/client.js';
-import { CourseCard } from '../components/CourseCard.jsx';
-import { courses as allCourses } from '../data/catalog.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const money = (value, currency = 'USD') =>
@@ -32,33 +30,29 @@ const lessonState = (lesson, ownsCourse) => {
   return lesson.duration;
 };
 
-const findCatalogCourse = (slug) => allCourses.find((course) => course.slug === slug);
-
 export const CourseDetails = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const initialCourse = findCatalogCourse(slug);
-  const [course, setCourse] = useState(initialCourse || null);
-  const [status, setStatus] = useState(initialCourse ? 'ready' : 'loading');
+  const [course, setCourse] = useState(null);
+  const [status, setStatus] = useState('loading');
   const [openModule, setOpenModule] = useState(0);
   const [cartMessage, setCartMessage] = useState('');
   const [cartError, setCartError] = useState('');
   const [cartBusy, setCartBusy] = useState(false);
 
   useEffect(() => {
-    const localCourse = findCatalogCourse(slug);
-    setCourse(localCourse || null);
-    setStatus(localCourse ? 'ready' : 'loading');
+    setCourse(null);
+    setStatus('loading');
     getCourse(slug)
       .then((data) => {
-        const nextCourse = data.course || localCourse || null;
+        const nextCourse = data.course || null;
         setCourse(nextCourse);
         setStatus(nextCourse ? 'ready' : 'not-found');
       })
       .catch(() => {
-        setCourse(localCourse || null);
-        setStatus(localCourse ? 'ready' : 'not-found');
+        setCourse(null);
+        setStatus('not-found');
       });
   }, [slug]);
 
@@ -82,7 +76,6 @@ export const CourseDetails = () => {
   }
 
   const ownsCourse = owns(user, course);
-  const related = allCourses.filter((item) => item.slug !== course.slug).slice(0, 3);
   const hasRating = Number(course.rating) > 0;
   const studentsEnrolled = Number(course.studentsEnrolled || 0);
   const hasStudents = studentsEnrolled > 0;
@@ -310,20 +303,6 @@ export const CourseDetails = () => {
           )}
         </aside>
       </section>
-
-      {!!related.length && (
-        <section className="section">
-          <div className="section-heading">
-            <p className="eyebrow">Related courses</p>
-            <h2>Keep building your engineering toolkit</h2>
-          </div>
-          <div className="course-grid">
-            {related.map((item) => (
-              <CourseCard key={item.slug} course={item} />
-            ))}
-          </div>
-        </section>
-      )}
     </main>
   );
 };

@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { CheckCircle, CreditCard, ExternalLink, ShieldCheck } from 'lucide-react';
-import { checkoutCourse, getCourse, verifyMockPayment } from '../api/client.js';
+import { checkoutCourse, getCourse } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import { courses as fallbackCourses } from '../data/catalog.js';
 
 const money = (value, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(Number(value || 0));
@@ -12,9 +11,7 @@ export const Checkout = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
   const { user, enrollCourse, refreshMe } = useAuth();
-  const initialCourse = fallbackCourses.find((item) => item.slug === slug);
-  const [course, setCourse] = useState(initialCourse || null);
-  const [provider, setProvider] = useState('stripe');
+  const [course, setCourse] = useState(null);
   const [country, setCountry] = useState('');
   const [couponCode, setCouponCode] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -27,9 +24,7 @@ export const Checkout = () => {
       navigate('/login', { state: { from: `/checkout/${slug}` } });
       return;
     }
-    const localCourse = fallbackCourses.find((item) => item.slug === slug);
-    setCourse(localCourse || null);
-    getCourse(slug).then((data) => setCourse(data.course || localCourse || null));
+    getCourse(slug).then((data) => setCourse(data.course || null));
   }, [slug, user, navigate]);
 
   if (!course) {
@@ -48,7 +43,7 @@ export const Checkout = () => {
     try {
       const data = await checkoutCourse({
         courseId: course._id || course.id,
-        provider,
+        provider: 'stripe',
         country,
         couponCode,
         termsAccepted
@@ -57,15 +52,6 @@ export const Checkout = () => {
       if (data.payment?.checkoutUrl) {
         setMessage('Payment initialized. Opening the hosted payment page now.');
         window.location.assign(data.payment.checkoutUrl);
-        return;
-      }
-
-      if (data.mockVerificationAvailable) {
-        await verifyMockPayment(data.order._id);
-        enrollCourse(course);
-        await refreshMe().catch(() => null);
-        setMessage('Local payment verification completed. Course streaming is unlocked.');
-        setTimeout(() => navigate(`/learn/${course.slug}`), 700);
         return;
       }
 
@@ -80,7 +66,7 @@ export const Checkout = () => {
       setMessage(
         data.payment?.clientSecret
           ? 'Stripe payment is initialized. Access unlocks after Stripe confirms payment and the webhook verifies it.'
-          : 'Payment is initialized. Course access unlocks after the payment provider verifies it.'
+          : 'Payment is initialized. Course access unlocks after Stripe verifies it.'
       );
     } catch (err) {
       setError(err.message);
@@ -120,32 +106,10 @@ export const Checkout = () => {
             <input value={couponCode} onChange={(event) => setCouponCode(event.target.value)} placeholder="FORGE10" />
           </label>
 
-          <fieldset className="segmented">
-            <legend>Payment gateway</legend>
-            <label>
-              <input
-                type="radio"
-                name="provider"
-                value="stripe"
-                checked={provider === 'stripe'}
-                onChange={(event) => setProvider(event.target.value)}
-              />
-              <span>Stripe</span>
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="provider"
-                value="paystack"
-                checked={provider === 'paystack'}
-                onChange={(event) => setProvider(event.target.value)}
-              />
-              <span>Paystack</span>
-            </label>
-          </fieldset>
+          <input type="hidden" name="provider" value="stripe" />
 
           <p className="form-muted">
-            Stripe handles global card payments. Paystack supports African payment flows, including mobile money where available.
+            Stripe handles secure card checkout and payment verification.
           </p>
 
           <label className="checkbox-row">

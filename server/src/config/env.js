@@ -10,7 +10,6 @@ dotenv.config();
 
 export const env = {
   port: process.env.PORT || 5000,
-  demoBackend: process.env.DEMO_BACKEND === 'true',
   mongoUri: process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/planeforge',
   mongoServerSelectionTimeoutMs: Number(process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS || 5000),
   mongoReconnectIntervalMs: Number(process.env.MONGO_RECONNECT_INTERVAL_MS || 30000),
@@ -28,18 +27,15 @@ export const env = {
     .map((origin) => origin.trim())
     .filter(Boolean),
   resendApiKey: process.env.RESEND_API_KEY,
-  resendFrom: process.env.RESEND_FROM || 'PlaneForge <hello@planeforge.local>',
+  resendFrom: process.env.RESEND_FROM,
   cloudinary: {
     cloudName: process.env.CLOUDINARY_CLOUD_NAME,
     apiKey: process.env.CLOUDINARY_API_KEY,
     apiSecret: process.env.CLOUDINARY_API_SECRET
   },
   payments: {
-    mock: process.env.MOCK_PAYMENTS !== 'false',
     stripeSecretKey: process.env.STRIPE_SECRET_KEY,
-    stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
-    paystackSecretKey: process.env.PAYSTACK_SECRET_KEY,
-    paystackWebhookSecret: process.env.PAYSTACK_WEBHOOK_SECRET
+    stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET
   },
   streaming: {
     provider: process.env.STREAM_PROVIDER || 'unconfigured',

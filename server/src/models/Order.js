@@ -42,7 +42,7 @@ const orderSchema = new mongoose.Schema(
     },
     provider: {
       type: String,
-      enum: ['stripe', 'paystack', 'mock'],
+      enum: ['stripe'],
       required: true
     },
     status: {

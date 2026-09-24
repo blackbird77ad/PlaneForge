@@ -1,22 +1,27 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Clock, Search } from 'lucide-react';
 import { getArticles } from '../api/client.js';
-import { articles as fallbackArticles } from '../data/catalog.js';
 
 export const Blog = () => {
-  const [articles, setArticles] = useState(fallbackArticles);
+  const [articles, setArticles] = useState([]);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('All');
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    getArticles().then((data) => {
-      setArticles(data.articles?.length ? data.articles : fallbackArticles);
-    });
+    getArticles()
+      .then((data) => {
+        setArticles(data.articles || []);
+      })
+      .catch((err) => {
+        setArticles([]);
+        setError(err.message || 'Unable to load articles');
+      });
   }, []);
 
   const categories = useMemo(
-    () => ['All', ...Array.from(new Set(fallbackArticles.map((article) => article.category)))],
-    []
+    () => ['All', ...Array.from(new Set(articles.map((article) => article.category).filter(Boolean)))],
+    [articles]
   );
 
   const visibleArticles = useMemo(() => {
@@ -94,8 +99,8 @@ export const Blog = () => {
         {visibleArticles.length === 0 && (
           <div className="empty-state">
             <Clock size={28} />
-            <h2>No articles match that search</h2>
-            <p>Try a broader PCB topic, or clear the category filter.</p>
+            <h2>{error ? 'Articles are unavailable' : 'No articles match that search'}</h2>
+            <p>{error || 'Try a broader PCB topic, or clear the category filter.'}</p>
           </div>
         )}
       </section>

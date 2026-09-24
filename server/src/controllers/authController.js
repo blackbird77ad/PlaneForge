@@ -134,18 +134,6 @@ const createLoginChallenge = async ({ user, req, deviceId }) => {
   const code = generateLoginCode();
   const expiresAt = codeExpiry();
 
-  await LoginChallenge.updateMany(
-    {
-      user: user._id,
-      consumedAt: { $exists: false }
-    },
-    {
-      $set: {
-        consumedAt: new Date()
-      }
-    }
-  );
-
   const challenge = await LoginChallenge.create({
     user: user._id,
     codeHash: LoginChallenge.hashCode(code),
@@ -154,7 +142,28 @@ const createLoginChallenge = async ({ user, req, deviceId }) => {
     expiresAt
   });
 
-  await sendLoginCodeEmail({ user, code, expiresAt });
+  try {
+    await sendLoginCodeEmail({ user, code, expiresAt });
+  } catch (error) {
+    challenge.consumedAt = new Date();
+    await challenge.save().catch((saveError) => {
+      console.error('Unable to invalidate undelivered login challenge', saveError);
+    });
+    throw error;
+  }
+
+  await LoginChallenge.updateMany(
+    {
+      user: user._id,
+      _id: { $ne: challenge._id },
+      consumedAt: { $exists: false }
+    },
+    {
+      $set: {
+        consumedAt: new Date()
+      }
+    }
+  );
 
   return {
     requiresVerification: true,
@@ -210,7 +219,15 @@ export const register = asyncHandler(async (req, res) => {
     });
   }
 
-  const challenge = await createLoginChallenge({ user, req, deviceId });
+  let challenge;
+  try {
+    challenge = await createLoginChallenge({ user, req, deviceId });
+  } catch (error) {
+    await User.deleteOne({ _id: user._id }).catch((cleanupError) => {
+      console.error('Unable to clean up account after failed verification email', cleanupError);
+    });
+    throw error;
+  }
 
   res.status(201).json({
     message: 'Check your email for a PlaneForge login code.',
@@ -314,6 +331,45 @@ export const verifyLogin = asyncHandler(async (req, res) => {
       expiresAt: session.expiresAt
     },
     user: publicUser(user)
+  });
+});
+
+export const resendLoginCode = asyncHandler(async (req, res) => {
+  const { challengeId } = req.body;
+  const deviceId = getDeviceId(req);
+
+  if (!challengeId) {
+    throw new ApiError(400, 'Challenge id is required');
+  }
+
+  if (!deviceId) {
+    throw new ApiError(400, 'A device id is required to resend this code');
+  }
+
+  const challenge = await LoginChallenge.findById(challengeId).populate('user');
+
+  if (!challenge || challenge.consumedAt) {
+    throw new ApiError(401, 'Verification code is invalid or has expired');
+  }
+
+  if (challenge.deviceId !== deviceId) {
+    throw new ApiError(401, 'This verification code was issued for another device');
+  }
+
+  if (challenge.createdAt && Date.now() - challenge.createdAt.getTime() < 30 * 1000) {
+    throw new ApiError(429, 'Please wait a moment before requesting another code.');
+  }
+
+  const user = challenge.user;
+  if (!user || user.status !== 'active') {
+    throw new ApiError(401, 'Account is not available');
+  }
+
+  const nextChallenge = await createLoginChallenge({ user, req, deviceId });
+
+  res.json({
+    message: 'A new PlaneForge verification code has been sent.',
+    ...nextChallenge
   });
 });
 

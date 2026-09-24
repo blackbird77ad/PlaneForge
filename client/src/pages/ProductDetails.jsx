@@ -13,9 +13,7 @@ import {
   Truck
 } from 'lucide-react';
 import { addCartItem, getProduct, submitContactInquiry } from '../api/client.js';
-import { ProductCard } from '../components/ProductCard.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
-import { products as fallbackProducts } from '../data/catalog.js';
 
 const money = (value, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(Number(value || 0));
@@ -45,16 +43,13 @@ const requestInitial = (user) => ({
   message: ''
 });
 
-const findFallbackProduct = (slug) => fallbackProducts.find((product) => product.slug === slug);
-
 export const ProductDetails = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const initialProduct = findFallbackProduct(slug);
-  const [product, setProduct] = useState(initialProduct || null);
-  const [status, setStatus] = useState(initialProduct ? 'ready' : 'loading');
-  const [selectedImage, setSelectedImage] = useState(initialProduct?.thumbnail || initialProduct?.images?.[0] || '');
+  const [product, setProduct] = useState(null);
+  const [status, setStatus] = useState('loading');
+  const [selectedImage, setSelectedImage] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [cartMessage, setCartMessage] = useState('');
   const [cartError, setCartError] = useState('');
@@ -65,21 +60,20 @@ export const ProductDetails = () => {
   const [requestBusy, setRequestBusy] = useState(false);
 
   useEffect(() => {
-    const localProduct = findFallbackProduct(slug);
-    setProduct(localProduct || null);
-    setStatus(localProduct ? 'ready' : 'loading');
-    setSelectedImage(localProduct?.thumbnail || localProduct?.images?.[0] || '');
+    setProduct(null);
+    setStatus('loading');
+    setSelectedImage('');
 
     getProduct(slug)
       .then((data) => {
-        const nextProduct = data.product || localProduct || null;
+        const nextProduct = data.product || null;
         setProduct(nextProduct);
         setSelectedImage(nextProduct?.thumbnail || nextProduct?.images?.[0] || '');
         setStatus(nextProduct ? 'ready' : 'not-found');
       })
       .catch(() => {
-        setProduct(localProduct || null);
-        setStatus(localProduct ? 'ready' : 'not-found');
+        setProduct(null);
+        setStatus('not-found');
       });
   }, [slug]);
 
@@ -121,9 +115,6 @@ export const ProductDetails = () => {
   const safeQuantity = Math.min(Math.max(1, Number(quantity || 1)), quantityLimit);
   const unavailable = isOutOfStock(product);
   const image = selectedImage || product.thumbnail || galleryImages[0] || '/favicon.png';
-  const related = fallbackProducts
-    .filter((item) => item.slug !== product.slug && item.status === 'published')
-    .slice(0, 3);
 
   const buyProduct = () => {
     const checkoutPath = `/checkout/product/${product.slug}`;
@@ -264,7 +255,7 @@ export const ProductDetails = () => {
           {cartMessage && <p className="form-success">{cartMessage}</p>}
           {cartError && <p className="form-error">{cartError}</p>}
           <span>
-            <ShieldCheck size={16} /> Secure checkout through configured payment providers.
+            <ShieldCheck size={16} /> Secure checkout through Stripe.
           </span>
         </aside>
       </section>
@@ -396,19 +387,6 @@ export const ProductDetails = () => {
         </aside>
       </section>
 
-      {!!related.length && (
-        <section className="section">
-          <div className="section-heading">
-            <p className="eyebrow">Related products</p>
-            <h2>More PlaneForge hardware resources</h2>
-          </div>
-          <div className="course-grid product-grid">
-            {related.map((item) => (
-              <ProductCard key={item.slug} product={item} />
-            ))}
-          </div>
-        </section>
-      )}
     </main>
   );
 };

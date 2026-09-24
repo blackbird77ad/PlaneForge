@@ -38,7 +38,7 @@ const enrollmentSchema = new mongoose.Schema(
     revokeReason: String,
     source: {
       type: String,
-      enum: ['payment_webhook', 'mock_verification', 'free_course', 'admin'],
+      enum: ['payment_webhook', 'free_course', 'admin'],
       default: 'payment_webhook'
     }
   },

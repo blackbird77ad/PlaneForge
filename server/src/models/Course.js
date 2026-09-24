@@ -170,7 +170,7 @@ const courseSchema = new mongoose.Schema(
         country: String,
         provider: {
           type: String,
-          enum: ['stripe', 'paystack']
+          enum: ['stripe']
         }
       }
     ],

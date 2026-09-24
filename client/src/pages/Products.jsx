@@ -1,12 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ChevronDown, PackageSearch, Search, SlidersHorizontal } from 'lucide-react';
-import { getLocalProductResults, getProducts } from '../api/client.js';
+import { getProducts } from '../api/client.js';
 import { ProductCard } from '../components/ProductCard.jsx';
-import { products as fallbackProducts } from '../data/catalog.js';
-
-const unique = (key) =>
-  Array.from(new Set(fallbackProducts.map((product) => product[key]).filter(Boolean)));
 
 const filterKeys = ['search', 'category', 'type', 'price', 'sort', 'page'];
 const defaultFilters = {
@@ -40,6 +36,7 @@ export const Products = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState(initialFilters);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const nextFilters = filtersFromParams(searchParams);
@@ -60,17 +57,18 @@ export const Products = () => {
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setError('');
     getProducts(filters)
       .then((data) => {
         if (!active) return;
         setItems(data.products || []);
         setPagination(data.pagination || { page: 1, pages: 1, total: data.products?.length || 0 });
       })
-      .catch(() => {
+      .catch((err) => {
         if (!active) return;
-        const localData = getLocalProductResults(filters);
-        setItems(localData.products || []);
-        setPagination(localData.pagination || { page: 1, pages: 1, total: 0 });
+        setItems([]);
+        setPagination({ page: 1, pages: 1, total: 0 });
+        setError(err.message || 'Unable to load products');
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -82,7 +80,7 @@ export const Products = () => {
   }, [filters]);
 
   const categories = useMemo(
-    () => Array.from(new Set([...unique('category'), ...items.map((product) => product.category)].filter(Boolean))),
+    () => Array.from(new Set(items.map((product) => product.category).filter(Boolean))),
     [items]
   );
   const update = (key, value) => setFilters((current) => ({ ...current, [key]: value, page: 1 }));
@@ -195,8 +193,8 @@ export const Products = () => {
       ) : (
         <div className="empty-state">
           <PackageSearch size={28} />
-          <h2>No products found</h2>
-          <p>Clear the filters or request the hardware product you want PlaneForge to build.</p>
+          <h2>{error ? 'Products are unavailable' : 'No products found'}</h2>
+          <p>{error || 'Clear the filters or request the hardware product you want PlaneForge to build.'}</p>
           <button className="button primary" type="button" onClick={resetFilters}>
             Reset Products
           </button>

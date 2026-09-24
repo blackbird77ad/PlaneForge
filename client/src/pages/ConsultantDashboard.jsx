@@ -5,25 +5,6 @@ import { MetricCard } from '../components/MetricCard.jsx';
 import { getDashboard, withdrawEarning } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
-const fallbackSessions = [
-  {
-    student: 'Maya Okafor',
-    service: 'PCB design review',
-    time: 'Tuesday, 10:00',
-    amount: 250,
-    currency: 'USD',
-    status: 'confirmed'
-  },
-  {
-    student: 'BridgeWorks Studio',
-    service: 'Hardware bring-up planning',
-    time: 'Thursday, 15:00',
-    amount: 250,
-    currency: 'USD',
-    status: 'pending'
-  }
-];
-
 const formatDate = (value) => {
   if (!value) return 'Not scheduled';
   const date = new Date(value);
@@ -79,10 +60,7 @@ export const ConsultantDashboard = () => {
   };
 
   const sessions = useMemo(
-    () =>
-      dashboard?.consultations?.length
-        ? dashboard.consultations.map(sessionFromConsultation)
-        : fallbackSessions,
+    () => (dashboard?.consultations || []).map(sessionFromConsultation),
     [dashboard]
   );
   const earnings =

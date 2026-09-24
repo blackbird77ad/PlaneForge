@@ -1,78 +1,61 @@
 # PlaneForge
 
-PlaneForge is a MERN learning management and engineering consultation platform. It includes a public marketing website, course catalogue, protected course checkout flow, consultation booking, PWA assets, role-aware dashboards, and an Express/Mongo API scaffold.
+PlaneForge is a Node-based learning, consultation, and commerce platform for PCB design and hardware engineering education. It helps students move from fundamentals to build-ready engineering work through structured courses, protected learning access, progress tracking, certificates, product checkout, and consultation workflows.
+
+Built by [The BrandHelper](https://thebrandhelper.com).
+
+## What It Does
+
+PlaneForge gives learners one place to discover PCB courses, enroll through verified payments, stream course material, track lesson progress, and manage certificates. Students can request guidance, book engineering consultations, save cart items, and review their account activity from a role-aware dashboard.
+
+Admins manage the operating side of the platform through database-backed CRUD tools for courses, lessons, products, articles, users, enrollments, consultations, inquiries, payments, expenses, earnings, and settings. Consultants and partners have their own dashboards for bookings, earnings, and platform activity.
 
 ## Stack
 
-- MongoDB, Express, React, Node
-- Vite React client
-- Mongoose models for users, courses, orders, progress, certificates, consultations, content, newsletter subscriptions, and settings
-- Resend email integration point
-- Cloudinary asset integration point
-- Stripe and Paystack payment boundaries with local mock payment mode
+- Node.js and Express API
+- MongoDB with Mongoose models
+- React and Vite frontend
+- JWT sessions with device-aware login verification
+- Resend email integration
+- Cloudinary image uploads
+- Stripe payment integration
+- Stream provider integration points for course video delivery
 
 ## Local Setup
 
-1. Install dependencies:
+1. Install dependencies.
 
    ```bash
    npm install
    ```
 
-   If your local registry certificate chain fails with `UNABLE_TO_VERIFY_LEAF_SIGNATURE`, run:
-
-   ```bash
-   npm install --strict-ssl=false --no-audit --no-fund
-   ```
-
-2. Copy environment values:
+2. Copy environment values.
 
    ```bash
    copy .env.example .env
    ```
 
-3. Choose a backend mode:
+3. Set a local or hosted MongoDB connection in `.env`.
 
-   ```bash
-   DEMO_BACKEND=true
+   ```text
+   MONGO_URI=mongodb://127.0.0.1:27017/planeforge
    ```
 
-   Demo backend mode serves seeded in-memory data and does not require MongoDB. Use this for quick local admin and login testing.
+4. Add service keys for the features you want to test locally, such as Resend, Cloudinary, Stripe, and a streaming provider.
 
-   ```bash
-   DEMO_BACKEND=false
-   ```
-
-   Database backend mode requires MongoDB locally or a hosted `MONGO_URI`.
-
-4. Seed demo data when using the Mongo-backed database mode:
+5. Bootstrap the admin accounts.
 
    ```bash
    npm run seed
    ```
 
-5. Start the full app:
+6. Start the app.
 
    ```bash
    npm run dev
    ```
 
-   The React dev server starts at `http://localhost:7310/`. If that port is already in use, Vite will print the next available local URL.
-
-## Test Logins
-
-The local demo backend and seeded Mongo data both use `Password123!`.
-
-| Area | Email | Access |
-| --- | --- | --- |
-| Admin | `admin@planeforge.test` | `/admin` |
-| Learner | `student@planeforge.test` | `/login` |
-| Consultant | `consultant@planeforge.test` | `/consultant` |
-| Partner | `partner@planeforge.test` | Admin-created account, then `/login` |
-
-The public `/login` form does not ask visitors to choose a role. After the one-time code is verified, the account role sends the user to the correct dashboard. In local development, when `RESEND_API_KEY` is empty, the one-time login code is returned in the API response and shown by the UI as a development code. If the browser-only demo fallback is used because the API is unavailable, the verification code is `123456`.
-
-Local admin sign-up uses `ADMIN_SETUP_CODE`; the default local value is `PLANEFORGE-ADMIN-2026`.
+The API runs on the configured `PORT`, and the React app runs through Vite. Local and hosted environments use the same database-backed API behavior.
 
 ## Useful Commands
 
@@ -86,17 +69,15 @@ npm run seed
 
 ## API Areas
 
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `GET /api/courses`
-- `GET /api/courses/:slug`
-- `GET /api/courses/:slug/learn`
-- `POST /api/payments/checkout`
-- `GET /api/consultations/consultants`
-- `POST /api/consultations/book`
-- `GET /api/users/dashboard`
-- `GET /api/admin/overview`
+- Authentication and account sessions
+- Course catalog, course CRUD, learning playback, comments, and progress
+- Product catalog, product CRUD, cart, and checkout
+- Consultation booking and consultant dashboards
+- Contact inquiries, newsletter subscriptions, articles, and homepage content
+- Admin overview, users, enrollments, payments, expenses, earnings, settings, products, and articles
 
-## Notes
+## Environment
 
-`MOCK_PAYMENTS=true` keeps local checkout and consultation booking usable without live Stripe or Paystack credentials. Add Resend, Cloudinary, Stripe, and Paystack keys in `.env` when moving from local demo mode to real integrations.
+Use `.env.example` as the starting point for required environment variables. At minimum, configure MongoDB, JWT secret, client URL, admin setup code, and any third-party service keys needed for the workflows you are testing.
+
+Account verification, password reset, and profile-change codes require `RESEND_API_KEY` and a `RESEND_FROM` sender verified in the Resend dashboard.

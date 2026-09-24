@@ -1,14 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { CheckCircle, CreditCard, ExternalLink, PackageCheck, ShieldCheck } from 'lucide-react';
-import { checkoutProduct, getProduct, verifyMockPayment } from '../api/client.js';
+import { checkoutProduct, getProduct } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
-import { products as fallbackProducts } from '../data/catalog.js';
 
 const money = (value, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(Number(value || 0));
-
-const findFallbackProduct = (slug) => fallbackProducts.find((item) => item.slug === slug);
 
 const stockLimit = (product) => {
   if (product?.productType === 'digital') return 99;
@@ -26,9 +23,7 @@ export const ProductCheckout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, refreshMe } = useAuth();
-  const initialProduct = findFallbackProduct(slug);
-  const [product, setProduct] = useState(initialProduct || null);
-  const [provider, setProvider] = useState('stripe');
+  const [product, setProduct] = useState(null);
   const [quantity, setQuantity] = useState(location.state?.quantity || 1);
   const [couponCode, setCouponCode] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -42,9 +37,7 @@ export const ProductCheckout = () => {
       return;
     }
 
-    const localProduct = findFallbackProduct(slug);
-    setProduct(localProduct || null);
-    getProduct(slug).then((data) => setProduct(data.product || localProduct || null));
+    getProduct(slug).then((data) => setProduct(data.product || null));
   }, [slug, user, navigate]);
 
   if (!product) {
@@ -66,7 +59,7 @@ export const ProductCheckout = () => {
     try {
       const data = await checkoutProduct({
         productId: product._id || product.id,
-        provider,
+        provider: 'stripe',
         couponCode,
         termsAccepted,
         quantity: safeQuantity
@@ -75,13 +68,6 @@ export const ProductCheckout = () => {
       if (data.payment?.checkoutUrl) {
         setMessage('Payment initialized. Opening the hosted payment page now.');
         window.location.assign(data.payment.checkoutUrl);
-        return;
-      }
-
-      if (data.mockVerificationAvailable) {
-        await verifyMockPayment(data.order._id);
-        await refreshMe().catch(() => null);
-        setMessage('Local payment verification completed. PlaneForge has recorded the product order.');
         return;
       }
 
@@ -94,7 +80,7 @@ export const ProductCheckout = () => {
       setMessage(
         data.payment?.clientSecret
           ? 'Stripe payment is initialized. PlaneForge records the product order after Stripe confirms payment.'
-          : 'Payment is initialized. PlaneForge records the product order after the provider verifies it.'
+          : 'Payment is initialized. PlaneForge records the product order after Stripe verifies it.'
       );
     } catch (err) {
       setError(err.message);
@@ -144,32 +130,10 @@ export const ProductCheckout = () => {
             <input value={couponCode} onChange={(event) => setCouponCode(event.target.value)} placeholder="FORGE10" />
           </label>
 
-          <fieldset className="segmented">
-            <legend>Payment gateway</legend>
-            <label>
-              <input
-                type="radio"
-                name="provider"
-                value="stripe"
-                checked={provider === 'stripe'}
-                onChange={(event) => setProvider(event.target.value)}
-              />
-              <span>Stripe</span>
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="provider"
-                value="paystack"
-                checked={provider === 'paystack'}
-                onChange={(event) => setProvider(event.target.value)}
-              />
-              <span>Paystack</span>
-            </label>
-          </fieldset>
+          <input type="hidden" name="provider" value="stripe" />
 
           <p className="form-muted">
-            Stripe handles global card payments. Paystack supports African payment flows, including mobile money where available.
+            Stripe handles secure card checkout and payment verification.
           </p>
 
           <label className="checkbox-row">

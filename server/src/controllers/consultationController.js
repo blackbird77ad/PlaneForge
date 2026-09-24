@@ -1,4 +1,5 @@
 import { Consultation } from '../models/Consultation.js';
+import { env } from '../config/env.js';
 import { User } from '../models/User.js';
 import { createPayment } from '../services/paymentService.js';
 import { createConsultationEarning } from '../services/revenueService.js';
@@ -41,6 +42,10 @@ export const bookConsultation = asyncHandler(async (req, res) => {
 
   if (!consultant) {
     throw new ApiError(404, 'Consultant not found');
+  }
+
+  if (provider !== 'stripe') {
+    throw new ApiError(400, 'Unsupported payment provider');
   }
 
   const amount = consultant.consultationFee || 150;

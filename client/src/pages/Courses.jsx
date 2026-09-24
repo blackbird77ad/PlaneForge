@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ChevronDown, Search, SlidersHorizontal } from 'lucide-react';
-import { getCourses, getLocalCourseResults } from '../api/client.js';
-import { courses as fallbackCourses } from '../data/catalog.js';
+import { getCourses } from '../api/client.js';
 import { CourseCard } from '../components/CourseCard.jsx';
 
-const unique = (key) => Array.from(new Set(fallbackCourses.map((course) => course[key]).filter(Boolean)));
 const filterKeys = ['search', 'category', 'discipline', 'difficulty', 'price', 'language', 'sort', 'page'];
 const defaultFilters = {
   search: '',
@@ -42,6 +40,7 @@ export const Courses = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState(initialFilters);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const nextFilters = filtersFromParams(searchParams);
@@ -62,17 +61,18 @@ export const Courses = () => {
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setError('');
     getCourses(filters)
       .then((data) => {
         if (!active) return;
         setItems(data.courses || []);
         setPagination(data.pagination || { page: 1, pages: 1, total: data.courses?.length || 0 });
       })
-      .catch(() => {
+      .catch((err) => {
         if (!active) return;
-        const localData = getLocalCourseResults(filters);
-        setItems(localData.courses || []);
-        setPagination(localData.pagination || { page: 1, pages: 1, total: 0 });
+        setItems([]);
+        setPagination({ page: 1, pages: 1, total: 0 });
+        setError(err.message || 'Unable to load courses');
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -85,10 +85,10 @@ export const Courses = () => {
 
   const options = useMemo(
     () => ({
-      category: Array.from(new Set([...unique('category'), ...items.map((course) => course.category)].filter(Boolean))),
-      discipline: Array.from(new Set([...unique('discipline'), ...items.map((course) => course.discipline)].filter(Boolean))),
-      difficulty: Array.from(new Set([...unique('difficulty'), ...items.map((course) => course.difficulty)].filter(Boolean))),
-      language: Array.from(new Set([...unique('language'), ...items.map((course) => course.language)].filter(Boolean)))
+      category: Array.from(new Set(items.map((course) => course.category).filter(Boolean))),
+      discipline: Array.from(new Set(items.map((course) => course.discipline).filter(Boolean))),
+      difficulty: Array.from(new Set(items.map((course) => course.difficulty).filter(Boolean))),
+      language: Array.from(new Set(items.map((course) => course.language).filter(Boolean)))
     }),
     [items]
   );
@@ -196,8 +196,8 @@ export const Courses = () => {
       ) : (
         <div className="empty-state">
           <Search size={28} />
-          <h2>No courses found</h2>
-          <p>Clear the filters or search a broader PCB topic.</p>
+          <h2>{error ? 'Courses are unavailable' : 'No courses found'}</h2>
+          <p>{error || 'Clear the filters or search a broader PCB topic.'}</p>
           <button className="button primary" type="button" onClick={resetFilters}>
             Reset Catalog
           </button>

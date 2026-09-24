@@ -158,7 +158,7 @@ export const requestEarningWithdrawal = async ({ user, earningId }) => {
   const earning = await Earning.findOne({ _id: earningId, earner: user._id, status: 'available' });
   if (!earning) return null;
 
-  if (stripe && user.stripeConnectAccountId && !env.payments.mock) {
+  if (stripe && user.stripeConnectAccountId) {
     const transfer = await stripe.transfers.create({
       amount: toCents(earning.amount),
       currency: earning.currency.toLowerCase(),

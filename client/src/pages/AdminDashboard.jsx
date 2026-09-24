@@ -27,7 +27,6 @@ import {
 import { DashboardShell } from '../components/DashboardShell.jsx';
 import { MetricCard } from '../components/MetricCard.jsx';
 import { PasswordField } from '../components/PasswordField.jsx';
-import { articles as fallbackArticles, consultants, courses as fallbackCourses } from '../data/catalog.js';
 import {
   archiveAdminArticle,
   archiveAdminCourse,
@@ -133,7 +132,7 @@ const userRoles = ['user', 'consultant', 'partner', 'admin'];
 const adminCreatedUserRoles = ['user', 'consultant', 'partner'];
 const userStatuses = ['active', 'suspended', 'pending'];
 const orderStatuses = ['pending', 'payment_initialized', 'verified', 'paid', 'failed', 'refunded'];
-const providers = ['stripe', 'paystack', 'mock'];
+const providers = ['stripe'];
 const consultationStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
 const articleStatuses = ['draft', 'published'];
 const productStatusOptions = ['draft', 'published', 'archived'];
@@ -492,7 +491,7 @@ const replaceById = (items, nextItem) =>
 export const AdminDashboard = () => {
   const [overview, setOverview] = useState(null);
   const [activities, setActivities] = useState([]);
-  const [content, setContent] = useState({ courses: fallbackCourses, articles: fallbackArticles, products: [] });
+  const [content, setContent] = useState({ courses: [], articles: [], products: [] });
   const [inquiries, setInquiries] = useState({ inquiries: [], grouped: { byIntent: [], byStatus: [], byTopic: [] } });
   const [users, setUsers] = useState({ users: [], pagination: null });
   const [payments, setPayments] = useState({ orders: [], pagination: null });
@@ -1163,7 +1162,7 @@ export const AdminDashboard = () => {
     },
     {
       label: 'Consultants',
-      value: overview?.consultants ?? consultants.length,
+      value: overview?.consultants ?? 0,
       detail: `${overview?.consultations ?? consultations.consultations?.length ?? 0} consultations`
     },
     {
@@ -1630,7 +1629,7 @@ export const AdminDashboard = () => {
             <aside className="admin-course-panel">
               <div className="admin-panel-heading">
                 <strong>Course catalogue</strong>
-                <span>{serverCourses.length ? `${serverCourses.length} live records` : 'Local fallback data'}</span>
+                <span>{serverCourses.length ? `${serverCourses.length} live records` : 'No course records yet'}</span>
               </div>
               <div className="admin-compact-list">
                 {courses.map((course) => (
@@ -2594,7 +2593,7 @@ export const AdminDashboard = () => {
             <h2>
               <UserCog size={20} /> Access Control
             </h2>
-            <p>Admins can update account status, adjust roles, and grant course access without creating mock payments.</p>
+            <p>Admins can update account status, adjust roles, and grant course access from stored records.</p>
           </article>
           <article className="admin-mini-panel">
             <h2>

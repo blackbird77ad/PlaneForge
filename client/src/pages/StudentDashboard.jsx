@@ -3,14 +3,10 @@ import { Award, BookOpen, CalendarDays, FileText, MessageSquare } from 'lucide-r
 import { DashboardShell } from '../components/DashboardShell.jsx';
 import { MetricCard } from '../components/MetricCard.jsx';
 import { CourseCard } from '../components/CourseCard.jsx';
-import { courses } from '../data/catalog.js';
 import { getDashboard } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
-const courseFromProgress = (item) => {
-  const fallback = courses.find((course) => course.slug === item.course?.slug);
-  return fallback || item.course;
-};
+const courseFromProgress = (item) => item.course;
 
 export const StudentDashboard = () => {
   const { user } = useAuth();
@@ -22,10 +18,6 @@ export const StudentDashboard = () => {
     });
   }, []);
 
-  const owned = (user?.ownedCourses || []).map(String);
-  const localCourses = courses.filter(
-    (course) => owned.includes(String(course.slug)) || owned.includes(String(course._id || course.id))
-  );
   const progress = dashboard?.progress || [];
   const orders = dashboard?.orders || user?.orders || [];
   const certificates = dashboard?.certificates || [];
@@ -33,9 +25,7 @@ export const StudentDashboard = () => {
   const comments = dashboard?.comments || [];
   const cartItems = dashboard?.cartItems || [];
   const hasAccountActivity = consultations.length || comments.length || cartItems.length;
-  const activeCourses = progress.length
-    ? progress.map(courseFromProgress).filter(Boolean)
-    : localCourses;
+  const activeCourses = progress.map(courseFromProgress).filter(Boolean);
   const averageProgress = useMemo(() => {
     if (!progress.length) return 0;
     return Math.round(progress.reduce((sum, item) => sum + (item.percentComplete || 0), 0) / progress.length);

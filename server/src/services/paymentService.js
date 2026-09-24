@@ -18,23 +18,7 @@ export const createPayment = async ({
   cancelUrl,
   metadata = {}
 }) => {
-  const normalizedProvider = provider || 'mock';
-
-  if (env.payments.mock) {
-    return {
-      provider: 'mock',
-      status: 'payment_initialized',
-      paymentRef: `mock_${Date.now()}`,
-      amount,
-      currency,
-      checkoutUrl: null,
-      verificationRequired: true
-    };
-  }
-
-  if (normalizedProvider === 'mock') {
-    throw new ApiError(400, 'Mock payments are disabled');
-  }
+  const normalizedProvider = provider || 'stripe';
 
   if (normalizedProvider === 'stripe') {
     if (!stripe) {
@@ -77,46 +61,5 @@ export const createPayment = async ({
     };
   }
 
-  if (normalizedProvider === 'paystack') {
-    if (!env.payments.paystackSecretKey) {
-      throw new ApiError(400, 'Paystack is not configured');
-    }
-
-    const response = await fetch('https://api.paystack.co/transaction/initialize', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${env.payments.paystackSecretKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        amount: toCents(amount),
-        currency,
-        email,
-        channels: ['card', 'mobile_money', 'bank', 'ussd', 'bank_transfer'],
-        callback_url: `${env.clientUrl}/checkout/complete`,
-        metadata: {
-          ...metadata,
-          description
-        }
-      })
-    });
-
-    const payload = await response.json();
-    if (!response.ok || !payload.status) {
-      throw new ApiError(400, payload.message || 'Unable to initialize Paystack payment');
-    }
-
-    return {
-      provider: 'paystack',
-      status: 'payment_initialized',
-      paymentRef: payload.data.reference,
-      amount,
-      currency,
-      checkoutUrl: payload.data.authorization_url,
-      accessCode: payload.data.access_code,
-      verificationRequired: true
-    };
-  }
-
-  throw new ApiError(400, 'Unsupported payment provider');
+  throw new ApiError(400, 'Stripe is the only supported payment provider');
 };

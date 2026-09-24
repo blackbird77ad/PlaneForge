@@ -1,16 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowRight, BookOpen, FileText, PackageSearch, Search as SearchIcon } from 'lucide-react';
-import { getCourses, getLocalCourseResults, getLocalProductResults, getProducts } from '../api/client.js';
+import { getArticles, getCourses, getProducts } from '../api/client.js';
 import { CourseCard } from '../components/CourseCard.jsx';
 import { ProductCard } from '../components/ProductCard.jsx';
-import { articles, courses as fallbackCourses, products as fallbackProducts } from '../data/catalog.js';
 
-const searchArticles = (query) => {
+const searchArticles = (items, query) => {
   const normalized = query.trim().toLowerCase();
-  if (!normalized) return articles.slice(0, 4);
+  if (!normalized) return items.slice(0, 4);
 
-  return articles.filter((article) =>
+  return items.filter((article) =>
     [article.title, article.excerpt, article.category, article.body]
       .join(' ')
       .toLowerCase()
@@ -22,8 +21,9 @@ export const Search = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get('q') || '';
   const [term, setTerm] = useState(query);
-  const [courseResults, setCourseResults] = useState(fallbackCourses.slice(0, 6));
-  const [productResults, setProductResults] = useState(fallbackProducts.slice(0, 3));
+  const [courseResults, setCourseResults] = useState([]);
+  const [productResults, setProductResults] = useState([]);
+  const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [productsLoading, setProductsLoading] = useState(false);
 
@@ -33,12 +33,13 @@ export const Search = () => {
 
   useEffect(() => {
     let active = true;
-    const localData = getLocalCourseResults({ search: query, limit: query ? 9 : 6, sort: 'popular' });
-    setCourseResults(localData.courses || []);
     setLoading(true);
     getCourses({ search: query, limit: query ? 9 : 6, sort: 'popular' })
       .then((data) => {
         if (active) setCourseResults(data.courses || []);
+      })
+      .catch(() => {
+        if (active) setCourseResults([]);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -51,12 +52,13 @@ export const Search = () => {
 
   useEffect(() => {
     let active = true;
-    const localData = getLocalProductResults({ search: query, limit: query ? 6 : 3, sort: 'newest' });
-    setProductResults(localData.products || []);
     setProductsLoading(true);
     getProducts({ search: query, limit: query ? 6 : 3, sort: 'newest' })
       .then((data) => {
         if (active) setProductResults(data.products || []);
+      })
+      .catch(() => {
+        if (active) setProductResults([]);
       })
       .finally(() => {
         if (active) setProductsLoading(false);
@@ -67,7 +69,22 @@ export const Search = () => {
     };
   }, [query]);
 
-  const articleResults = useMemo(() => searchArticles(query), [query]);
+  useEffect(() => {
+    let active = true;
+    getArticles()
+      .then((data) => {
+        if (active) setArticles(data.articles || []);
+      })
+      .catch(() => {
+        if (active) setArticles([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const articleResults = useMemo(() => searchArticles(articles, query), [articles, query]);
 
   const submit = (event) => {
     event.preventDefault();

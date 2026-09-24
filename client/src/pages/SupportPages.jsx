@@ -41,7 +41,7 @@ const faqs = [
   {
     question: 'What payment providers are supported?',
     answer:
-      'The platform includes Stripe and Paystack flows, with mock verification available for local development.'
+      'The platform supports Stripe for verified checkout and enrollment access.'
   }
 ];
 
@@ -121,7 +121,7 @@ const refunds = [
   {
     title: 'Duplicate Payments',
     text:
-      'Duplicate or accidental payments should be reported with the account email, course name, provider, and payment reference.'
+      'Duplicate or accidental payments should be reported with the account email, course name, and Stripe payment reference.'
   },
   {
     title: 'Consulting Bookings',
@@ -258,7 +258,7 @@ export const Refunds = () => (
       <InfoGrid items={refunds} />
       <div className="support-strip">
         <FileText size={22} />
-        <span>Include your account email, course name, payment provider, and payment reference.</span>
+        <span>Include your account email, course name, Stripe payment reference, and a short description.</span>
         <Link className="button primary small" to="/contact">
           Request Review
         </Link>

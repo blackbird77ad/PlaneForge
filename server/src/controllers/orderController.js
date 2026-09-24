@@ -1,4 +1,3 @@
-import crypto from 'crypto';
 import mongoose from 'mongoose';
 import Stripe from 'stripe';
 import { env } from '../config/env.js';
@@ -107,21 +106,6 @@ const completeVerifiedOrder = async ({ order, rawPaymentEvent, source = 'payment
   return populatedOrder;
 };
 
-const verifyPaystackSignature = (req) => {
-  if (!env.payments.paystackWebhookSecret) return;
-
-  const signature = req.headers['x-paystack-signature'];
-  const rawBody = req.rawBody || JSON.stringify(req.body);
-  const expected = crypto
-    .createHmac('sha512', env.payments.paystackWebhookSecret)
-    .update(rawBody)
-    .digest('hex');
-
-  if (signature !== expected) {
-    throw new ApiError(401, 'Invalid Paystack webhook signature');
-  }
-};
-
 const parseStripeEvent = (req) => {
   if (!env.payments.stripeWebhookSecret) return req.body;
   if (!stripe) throw new ApiError(400, 'Stripe is not configured');
@@ -143,10 +127,6 @@ const parseStripeEvent = (req) => {
 };
 
 const webhookPaymentRef = ({ provider, event }) => {
-  if (provider === 'paystack') {
-    return event?.data?.reference;
-  }
-
   if (provider === 'stripe') {
     const object = event?.data?.object || {};
     if (event?.type === 'checkout.session.completed') return object.id;
@@ -157,8 +137,6 @@ const webhookPaymentRef = ({ provider, event }) => {
 };
 
 const isSuccessWebhook = ({ provider, event }) => {
-  if (provider === 'paystack') return event?.event === 'charge.success';
-
   if (provider === 'stripe') {
     return ['payment_intent.succeeded', 'charge.succeeded', 'checkout.session.completed'].includes(
       event?.type
@@ -190,11 +168,8 @@ export const checkoutCourse = asyncHandler(async (req, res) => {
     throw new ApiError(409, 'Course is already unlocked');
   }
 
-  const providerOverride = course.paymentProviderOverrides?.find(
-    (item) => item.country?.toLowerCase() === country?.toLowerCase()
-  );
-  const selectedProvider = providerOverride?.provider || provider;
-  if (!['stripe', 'paystack', 'mock'].includes(selectedProvider)) {
+  const selectedProvider = provider;
+  if (selectedProvider !== 'stripe') {
     throw new ApiError(400, 'Unsupported payment provider');
   }
 
@@ -215,7 +190,7 @@ export const checkoutCourse = asyncHandler(async (req, res) => {
     quantity: 1,
     amount,
     currency: course.currency,
-    provider: amount <= 0 ? 'mock' : selectedProvider,
+    provider: selectedProvider,
     status: amount <= 0 ? 'verified' : 'pending',
     paymentRef: amount <= 0 ? `free_${Date.now()}` : `pending_${Date.now()}`,
     couponCode,
@@ -232,7 +207,7 @@ export const checkoutCourse = asyncHandler(async (req, res) => {
 
     return res.status(201).json({
       order: paidOrder,
-      payment: { provider: 'mock', status: 'paid', verificationRequired: false }
+      payment: { provider: selectedProvider, status: 'paid', verificationRequired: false }
     });
   }
 
@@ -259,8 +234,7 @@ export const checkoutCourse = asyncHandler(async (req, res) => {
   res.status(201).json({
     order,
     payment,
-    verificationRequired: true,
-    mockVerificationAvailable: payment.provider === 'mock'
+    verificationRequired: true
   });
 });
 
@@ -285,7 +259,10 @@ export const checkoutProduct = asyncHandler(async (req, res) => {
     throw new ApiError(409, 'Product is out of stock');
   }
 
-  const selectedProvider = ['stripe', 'paystack', 'mock'].includes(provider) ? provider : 'stripe';
+  const selectedProvider = provider;
+  if (selectedProvider !== 'stripe') {
+    throw new ApiError(400, 'Unsupported payment provider');
+  }
   const subtotal = product.price * safeQuantity;
   const amount = applyCoupon(subtotal, couponCode);
   const invoiceNumber = createInvoiceNumber();
@@ -304,7 +281,7 @@ export const checkoutProduct = asyncHandler(async (req, res) => {
     quantity: safeQuantity,
     amount,
     currency: product.currency,
-    provider: amount <= 0 ? 'mock' : selectedProvider,
+    provider: selectedProvider,
     status: amount <= 0 ? 'verified' : 'pending',
     paymentRef: amount <= 0 ? `free_product_${Date.now()}` : `pending_product_${Date.now()}`,
     couponCode,
@@ -321,7 +298,7 @@ export const checkoutProduct = asyncHandler(async (req, res) => {
 
     return res.status(201).json({
       order: paidOrder,
-      payment: { provider: 'mock', status: 'paid', verificationRequired: false }
+      payment: { provider: selectedProvider, status: 'paid', verificationRequired: false }
     });
   }
 
@@ -348,46 +325,18 @@ export const checkoutProduct = asyncHandler(async (req, res) => {
   res.status(201).json({
     order,
     payment,
-    verificationRequired: true,
-    mockVerificationAvailable: payment.provider === 'mock'
+    verificationRequired: true
   });
-});
-
-export const verifyMockPayment = asyncHandler(async (req, res) => {
-  if (!env.payments.mock) {
-    throw new ApiError(404, 'Mock payment verification is disabled');
-  }
-
-  const { orderId } = req.body;
-  const order = await Order.findOne({
-    _id: orderId,
-    user: req.user._id,
-    provider: 'mock',
-    status: { $in: ['pending', 'payment_initialized', 'verified'] }
-  });
-
-  if (!order) {
-    throw new ApiError(404, 'Mock order not found');
-  }
-
-  const paidOrder = await completeVerifiedOrder({
-    order,
-    rawPaymentEvent: { type: 'mock.payment_verified' },
-    source: 'mock_verification'
-  });
-
-  res.json({ order: paidOrder, access: 'granted' });
 });
 
 export const handlePaymentWebhook = asyncHandler(async (req, res) => {
   const { provider } = req.params;
 
-  if (!['stripe', 'paystack'].includes(provider)) {
+  if (provider !== 'stripe') {
     throw new ApiError(400, 'Unsupported payment webhook provider');
   }
 
-  const event = provider === 'stripe' ? parseStripeEvent(req) : req.body;
-  if (provider === 'paystack') verifyPaystackSignature(req);
+  const event = parseStripeEvent(req);
 
   if (!isSuccessWebhook({ provider, event })) {
     return res.json({ received: true, ignored: true });

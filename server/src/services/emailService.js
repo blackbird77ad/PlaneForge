@@ -1,20 +1,47 @@
 import { Resend } from 'resend';
 import { env } from '../config/env.js';
+import { ApiError } from '../utils/apiError.js';
 
 const resend = env.resendApiKey ? new Resend(env.resendApiKey) : null;
+const emailUnavailableMessage = 'We could not send the email right now. Please try again in a minute.';
 
-export const sendEmail = async ({ to, subject, html }) => {
+const resendErrorMessage = (error) => {
+  if (!error) return 'Unknown Resend error';
+  if (typeof error === 'string') return error;
+  return error.message || error.name || JSON.stringify(error);
+};
+
+export const sendEmail = async ({ to, subject, html, requireDelivery = false }) => {
   if (!resend) {
+    if (requireDelivery || process.env.NODE_ENV === 'production') {
+      throw new ApiError(503, 'Email delivery is not configured. Set RESEND_API_KEY before accepting signups.');
+    }
+
     console.log(`Email skipped without RESEND_API_KEY: ${subject} -> ${to}`);
     return { id: `dev-email-${Date.now()}` };
   }
 
-  const result = await resend.emails.send({
-    from: env.resendFrom,
-    to,
-    subject,
-    html
-  });
+  if (!env.resendFrom) {
+    throw new ApiError(503, 'Email delivery is not configured. Set RESEND_FROM to a verified Resend sender.');
+  }
+
+  let result;
+  try {
+    result = await resend.emails.send({
+      from: env.resendFrom,
+      to,
+      subject,
+      html
+    });
+  } catch (error) {
+    console.error(`Resend email request failed: ${subject} -> ${to}`, error);
+    throw new ApiError(502, emailUnavailableMessage);
+  }
+
+  if (result?.error) {
+    console.error(`Resend email delivery failed: ${subject} -> ${to}: ${resendErrorMessage(result.error)}`);
+    throw new ApiError(502, emailUnavailableMessage);
+  }
 
   return result.data || result;
 };
@@ -35,6 +62,7 @@ export const sendLoginCodeEmail = ({ user, code, expiresAt }) =>
   sendEmail({
     to: user.email,
     subject: 'Your PlaneForge login code',
+    requireDelivery: true,
     html: `
       <h1>Your login code</h1>
       <p>Hello ${user.name}, use this one-time code to finish signing in to PlaneForge Academy:</p>
@@ -48,6 +76,7 @@ export const sendPasswordResetCodeEmail = ({ user, code, expiresAt }) =>
   sendEmail({
     to: user.email,
     subject: 'Reset your PlaneForge password',
+    requireDelivery: true,
     html: `
       <h1>Password reset code</h1>
       <p>Hello ${user.name}, use this one-time code to reset your PlaneForge password:</p>
@@ -61,6 +90,7 @@ export const sendProfileChangeCodeEmail = ({ user, code, expiresAt, changes }) =
   sendEmail({
     to: user.email,
     subject: 'Confirm your PlaneForge profile change',
+    requireDelivery: true,
     html: `
       <h1>Confirm profile change</h1>
       <p>Hello ${user.name}, use this one-time code to confirm the account detail change on PlaneForge:</p>

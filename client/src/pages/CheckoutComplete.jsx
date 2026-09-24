@@ -6,7 +6,7 @@ export const CheckoutComplete = () => (
     <div className="locked-learning">
       <ShieldCheck size={30} />
       <h1>Payment verification is in progress</h1>
-      <p>Course access or product fulfillment updates after the payment provider confirms the transaction.</p>
+      <p>Course access or product fulfillment updates after Stripe confirms the transaction.</p>
       <div className="under-dev-actions">
         <Link className="button primary" to="/dashboard/user">
           View dashboard

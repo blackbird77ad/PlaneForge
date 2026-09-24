@@ -10,8 +10,6 @@
   ],
   "scripts": {
     "dev": "concurrently \"npm --workspace server run dev\" \"npm --workspace client run dev\"",
-    "dev:demo": "concurrently \"npm run demo:api\" \"npm --workspace client run dev\"",
-    "demo:api": "node -e \"process.env.PORT='5001'; process.env.DEMO_BACKEND='true'; import('./server/src/index.js')\"",
     "server": "npm --workspace server run dev",
     "client": "npm --workspace client run dev",
     "build": "npm --workspace client run build",

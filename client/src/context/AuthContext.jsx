@@ -8,6 +8,7 @@ import {
   requestProfileChange,
   requestPasswordReset,
   registerRequest,
+  resendLoginCodeRequest,
   updateProfileRequest,
   verifyLoginRequest
 } from '../api/client.js';
@@ -85,6 +86,14 @@ export const AuthProvider = ({ children }) => {
     return data.user;
   };
 
+  const resendLoginCode = async ({ challengeId }) => {
+    const challenge = await resendLoginCodeRequest({ challengeId });
+    setPendingChallenge((current) =>
+      challenge?.challengeId ? { ...challenge, email: current?.email } : current
+    );
+    return challenge;
+  };
+
   const logout = async () => {
     try {
       if (safeLocalStorage.getItem(storageToken)) {
@@ -153,6 +162,7 @@ export const AuthProvider = ({ children }) => {
       login,
       register,
       verifyLogin,
+      resendLoginCode,
       logout,
       enrollCourse,
       updateUser,

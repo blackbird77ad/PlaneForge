@@ -15,14 +15,14 @@ import {
   Users,
   Wrench
 } from 'lucide-react';
-import { courses, heroImage, publicStats } from '../data/catalog.js';
+import { getHomepage } from '../api/client.js';
+import { heroImage, publicStats } from '../data/catalog.js';
 import { NewsletterForm } from '../components/NewsletterForm.jsx';
 import { safeLocalStorage } from '../utils/storage.js';
 
 const formatMoney = (value, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(value);
 
-const featuredCourses = courses.filter((course) => course.isFeatured).slice(0, 8);
 const statIcons = [Users, BookOpen, ShieldCheck, Award];
 
 const consultationCards = [
@@ -257,8 +257,24 @@ const CookieConsent = () => {
 
 export const Home = () => {
   const showScrollButton = useScrollButton();
+  const [featuredCourses, setFeaturedCourses] = useState([]);
   useHomepageSeo();
   useRevealSections();
+
+  useEffect(() => {
+    let active = true;
+    getHomepage()
+      .then((data) => {
+        if (active) setFeaturedCourses((data.featuredCourses || []).slice(0, 8));
+      })
+      .catch(() => {
+        if (active) setFeaturedCourses([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <main className="home-page">

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { KeyRound, LogIn } from 'lucide-react';
+import { AlertCircle, CheckCircle, KeyRound, LogIn, RefreshCw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { PasswordField } from '../components/PasswordField.jsx';
 
@@ -14,7 +14,7 @@ const destinationFor = (from, role) => {
 export const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, verifyLogin } = useAuth();
+  const { login, verifyLogin, resendLoginCode } = useAuth();
   const [form, setForm] = useState({
     email: location.state?.email || '',
     password: ''
@@ -22,11 +22,14 @@ export const Login = () => {
   const [challenge, setChallenge] = useState(null);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [resendBusy, setResendBusy] = useState(false);
 
   const submit = async (event) => {
     event.preventDefault();
     setError('');
+    setNotice('');
     setBusy(true);
 
     try {
@@ -34,14 +37,34 @@ export const Login = () => {
         const nextChallenge = await login(form);
         setChallenge(nextChallenge);
         setCode('');
+        setNotice('Login code sent. Check your email to continue.');
       } else {
         const user = await verifyLogin({ challengeId: challenge.challengeId, code });
         navigate(destinationFor(location.state?.from, user.role), { replace: true });
       }
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Unable to sign in right now. Please try again.');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const resendCode = async () => {
+    if (!challenge?.challengeId) return;
+
+    setError('');
+    setNotice('');
+    setResendBusy(true);
+
+    try {
+      const nextChallenge = await resendLoginCode({ challengeId: challenge.challengeId });
+      setChallenge(nextChallenge);
+      setCode('');
+      setNotice('A fresh login code was sent. Check your email again.');
+    } catch (err) {
+      setError(err.message || 'Unable to resend the login code right now.');
+    } finally {
+      setResendBusy(false);
     }
   };
 
@@ -55,6 +78,18 @@ export const Login = () => {
             ? 'A short-lived code is required before this device can access purchased courses and products.'
             : 'Sign in as a PlaneForge user to buy products, enroll in courses, and manage purchases.'}
         </p>
+        {notice && (
+          <div className="auth-toast success" role="status">
+            <CheckCircle size={18} />
+            <span>{notice}</span>
+          </div>
+        )}
+        {error && (
+          <div className="auth-toast error" role="alert">
+            <AlertCircle size={18} />
+            <span>{error}</span>
+          </div>
+        )}
         <form onSubmit={submit}>
           {!challenge ? (
             <>
@@ -92,14 +127,28 @@ export const Login = () => {
           {challenge?.expiresAt && (
             <p className="form-muted">Code expires {new Date(challenge.expiresAt).toLocaleTimeString()}.</p>
           )}
-          {error && <p className="form-error">{error}</p>}
           <button className="button primary full" type="submit" disabled={busy}>
             {challenge ? <KeyRound size={18} /> : <LogIn size={18} />}
             {busy ? 'Please wait' : challenge ? 'Verify and Continue' : 'Send Login Code'}
           </button>
+          {challenge && (
+            <button
+              className="button ghost full auth-secondary"
+              type="button"
+              onClick={resendCode}
+              disabled={busy || resendBusy}
+            >
+              <RefreshCw size={18} />
+              {resendBusy ? 'Sending again' : 'Send Code Again'}
+            </button>
+          )}
         </form>
         {challenge && (
-          <button className="button ghost full auth-secondary" type="button" onClick={() => setChallenge(null)}>
+          <button className="button ghost full auth-secondary" type="button" onClick={() => {
+            setChallenge(null);
+            setNotice('');
+            setError('');
+          }}>
             Use a different email
           </button>
         )}
