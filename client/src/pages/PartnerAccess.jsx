@@ -4,13 +4,15 @@ import { BriefcaseBusiness, KeyRound, LogIn, RotateCcw, UserPlus } from 'lucide-
 import { PartnerDashboard } from './PartnerDashboard.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { PasswordField } from '../components/PasswordField.jsx';
+import { PhoneNumberField } from '../components/PhoneNumberField.jsx';
+import { getContactNumberError } from '../utils/contactNumber.js';
 
 const today = new Date().toISOString().slice(0, 10);
 
 const initialForms = {
   login: { email: '', password: '' },
   signup: { name: '', email: '', contactNumber: '', dateOfBirth: '', password: '' },
-  reset: { email: '', code: '', password: '', confirmPassword: '' }
+  reset: { email: '', code: '', resetToken: '', password: '', confirmPassword: '' }
 };
 
 const dashboardPath = (role) =>
@@ -25,6 +27,7 @@ export const PartnerAccess = () => {
     register,
     startPasswordReset,
     user,
+    verifyPasswordResetCode,
     verifyLogin
   } = useAuth();
   const [mode, setMode] = useState('login');
@@ -90,9 +93,17 @@ export const PartnerAccess = () => {
       return;
     }
 
-    if (!challenge && (!forms.signup.contactNumber.trim() || !forms.signup.dateOfBirth)) {
-      setError('Contact number and date of birth are required.');
-      return;
+    if (!challenge) {
+      const contactNumberError = getContactNumberError(forms.signup.contactNumber);
+      if (contactNumberError) {
+        setError(contactNumberError);
+        return;
+      }
+
+      if (!forms.signup.dateOfBirth) {
+        setError('Date of birth is required.');
+        return;
+      }
     }
 
     setBusy(true);
@@ -134,7 +145,19 @@ export const PartnerAccess = () => {
       if (resetStep === 'request') {
         const data = await startPasswordReset({ email: forms.reset.email, role: 'partner' });
         setMessage(data.message);
-        setResetStep('complete');
+        setResetStep('verify');
+        return;
+      }
+
+      if (resetStep === 'verify') {
+        const data = await verifyPasswordResetCode({
+          email: forms.reset.email,
+          role: 'partner',
+          code: forms.reset.code
+        });
+        update('reset', 'resetToken', data.resetToken || '');
+        setMessage(data.message || 'Reset code verified. Set a new password now.');
+        setResetStep('password');
         return;
       }
 
@@ -151,7 +174,7 @@ export const PartnerAccess = () => {
       const data = await finishPasswordReset({
         email: forms.reset.email,
         role: 'partner',
-        code: forms.reset.code,
+        resetToken: forms.reset.resetToken,
         password: forms.reset.password
       });
       setMessage(data.message);
@@ -273,15 +296,11 @@ export const PartnerAccess = () => {
                   onChange={(event) => update('signup', 'password', event.target.value)}
                   autoComplete="new-password"
                 />
-                <label>
-                  Contact number
-                  <input
-                    value={forms.signup.contactNumber}
-                    onChange={(event) => update('signup', 'contactNumber', event.target.value)}
-                    type="tel"
-                    required
-                  />
-                </label>
+                <PhoneNumberField
+                  value={forms.signup.contactNumber}
+                  onChange={(contactNumber) => update('signup', 'contactNumber', contactNumber)}
+                  required
+                />
                 <label>
                   Date of birth
                   <input
@@ -322,20 +341,26 @@ export const PartnerAccess = () => {
                 onChange={(event) => update('reset', 'email', event.target.value)}
                 type="email"
                 required
-                disabled={resetStep === 'complete'}
+                disabled={resetStep !== 'request'}
               />
             </label>
-            {resetStep === 'complete' && (
+            {resetStep === 'verify' && (
+              <label>
+                Reset code
+                <input
+                  value={forms.reset.code}
+                  onChange={(event) => update('reset', 'code', event.target.value)}
+                  inputMode="numeric"
+                  maxLength={6}
+                  required
+                />
+              </label>
+            )}
+            {resetStep === 'password' && (
               <>
                 <label>
-                  Reset code
-                  <input
-                    value={forms.reset.code}
-                    onChange={(event) => update('reset', 'code', event.target.value)}
-                    inputMode="numeric"
-                    maxLength={6}
-                    required
-                  />
+                  Verified reset code
+                  <input value={forms.reset.code} readOnly disabled />
                 </label>
                 <PasswordField
                   label="New password"
@@ -355,7 +380,13 @@ export const PartnerAccess = () => {
             {error && <p className="form-error">{error}</p>}
             <button className="button primary full" type="submit" disabled={busy}>
               {resetStep === 'request' ? <RotateCcw size={18} /> : <BriefcaseBusiness size={18} />}
-              {busy ? 'Please wait' : resetStep === 'request' ? 'Send Reset Code' : 'Reset Partner Password'}
+              {busy
+                ? 'Please wait'
+                : resetStep === 'request'
+                  ? 'Send Reset Code'
+                  : resetStep === 'verify'
+                    ? 'Verify Code'
+                    : 'Reset Partner Password'}
             </button>
           </form>
         )}

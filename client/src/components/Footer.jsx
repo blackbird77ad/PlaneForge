@@ -3,7 +3,7 @@ import { Award, BookOpen, Clock, Mail, ShieldCheck } from 'lucide-react';
 import { NewsletterForm } from './NewsletterForm.jsx';
 import logo from '../assets/planeforge-logo-site.png';
 
-const email = 'planeforge1@gmail.com';
+const contactEmails = ['admin@planeforge.org', 'planeforge1@gmail.com'];
 
 export const Footer = () => (
   <footer className="site-footer">
@@ -38,9 +38,11 @@ export const Footer = () => (
           builds to flight controllers and FPGA boards.
         </p>
         <div className="footer-contact">
-          <a href={`mailto:${email}`}>
-            <Mail size={18} /> {email}
-          </a>
+          {contactEmails.map((email) => (
+            <a href={`mailto:${email}`} key={email}>
+              <Mail size={18} /> {email}
+            </a>
+          ))}
         </div>
       </section>
 
@@ -57,6 +59,7 @@ export const Footer = () => (
       <section>
         <h3>Resources</h3>
         <Link to="/blog">Blog</Link>
+        <Link to="/careers">Careers</Link>
         <Link to="/faq">FAQ</Link>
         <Link to="/help">Help Center</Link>
         <Link to="/testimonials">Testimonials</Link>
@@ -72,9 +75,11 @@ export const Footer = () => (
 
       <section>
         <h3>Contact</h3>
-        <a href={`mailto:${email}`}>
-          <Mail size={18} /> Email
-        </a>
+        {contactEmails.map((email) => (
+          <a href={`mailto:${email}`} key={email}>
+            <Mail size={18} /> {email}
+          </a>
+        ))}
       </section>
 
       <section>

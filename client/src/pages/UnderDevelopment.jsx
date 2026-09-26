@@ -40,7 +40,7 @@ export const UnderDevelopment = () => {
             Return Home
             <ArrowRight size={18} />
           </Link>
-          <a className="button ghost" href="mailto:planeforge1@gmail.com">
+          <a className="button ghost" href="mailto:admin@planeforge.org?cc=planeforge1@gmail.com">
             <Mail size={18} />
             Email Us
           </a>

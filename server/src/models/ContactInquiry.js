@@ -7,6 +7,11 @@ const contactInquirySchema = new mongoose.Schema(
       enum: [
         'learner',
         'course_support',
+        'quote',
+        'issue',
+        'message',
+        'course',
+        'product',
         'b2b',
         'collaboration',
         'consulting',

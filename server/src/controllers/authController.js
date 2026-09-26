@@ -14,6 +14,7 @@ import {
 } from '../services/sessionService.js';
 import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { normalizeContactNumber } from '../utils/contactNumber.js';
 
 const publicUser = (user) => ({
   _id: user._id,
@@ -54,6 +55,8 @@ const codeExpiry = () =>
 const resetCodeExpiry = () =>
   new Date(Date.now() + env.auth.resetCodeTtlMinutes * 60 * 1000);
 
+const resetTokenExpiry = () => new Date(Date.now() + 5 * 60 * 1000);
+
 const normalizeRequestedRole = (role) => {
   if (!role || ['learner', 'student', 'buyer'].includes(role)) return 'user';
   return role;
@@ -74,8 +77,6 @@ const assertFullName = (name) => {
   }
   return value;
 };
-
-const normalizeContactNumber = (value) => compactString(value, 80);
 
 const parseDateOfBirth = (value) => {
   const rawDate = compactString(value, 40);
@@ -121,6 +122,22 @@ const assertRegistrationRole = ({ role, adminSetupCode }) => {
   }
 
   return normalizedRole;
+};
+
+const assertCanSelfRegisterAdmin = async () => {
+  const adminLimit = Number.isFinite(env.auth.adminSelfSignupLimit)
+    ? env.auth.adminSelfSignupLimit
+    : 2;
+
+  if (adminLimit < 0) return;
+
+  const adminCount = await User.countDocuments({ role: 'admin' });
+  if (adminCount >= adminLimit) {
+    throw new ApiError(
+      403,
+      'Admin self-signup is closed. Existing admins can create additional admin accounts from the dashboard.'
+    );
+  }
 };
 
 const assertExpectedRole = ({ user, role }) => {
@@ -193,6 +210,10 @@ export const register = asyncHandler(async (req, res) => {
   }
 
   const normalizedRole = assertRegistrationRole({ role, adminSetupCode });
+  if (normalizedRole === 'admin') {
+    await assertCanSelfRegisterAdmin();
+  }
+
   const parsedDateOfBirth = parseDateOfBirth(dateOfBirth);
   const existing = await User.findOne({ email: normalizedEmail });
 
@@ -394,10 +415,13 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
     });
   }
 
-  assertExpectedRole({ user, role });
+  if (role) {
+    assertExpectedRole({ user, role });
+  }
 
   const code = generateLoginCode();
   const expiresAt = resetCodeExpiry();
+  const resetUrl = `${env.clientUrl.replace(/\/$/, '')}/reset-password?email=${encodeURIComponent(user.email)}&code=${encodeURIComponent(code)}`;
 
   await PasswordResetChallenge.updateMany(
     {
@@ -417,7 +441,7 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
     expiresAt
   });
 
-  await sendPasswordResetCodeEmail({ user, code, expiresAt });
+  await sendPasswordResetCodeEmail({ user, code, expiresAt, resetUrl });
 
   res.json({
     message: 'If that account exists, a password reset code has been sent.',
@@ -425,25 +449,7 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
   });
 });
 
-export const resetPassword = asyncHandler(async (req, res) => {
-  const { email, code, password, role } = req.body;
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-  if (!emailPattern.test(email || '') || !code || !password) {
-    throw new ApiError(400, 'Email, reset code, and new password are required');
-  }
-
-  if (password.length < 8) {
-    throw new ApiError(400, 'Use at least 8 characters for the new password');
-  }
-
-  const user = await User.findOne({ email }).select('+passwordHash');
-  if (!user || user.status !== 'active') {
-    throw new ApiError(401, 'Reset code is invalid or has expired');
-  }
-
-  assertExpectedRole({ user, role });
-
+const findValidPasswordResetChallenge = async ({ user, code }) => {
   const challenge = await PasswordResetChallenge.findOne({
     user: user._id,
     consumedAt: { $exists: false },
@@ -464,7 +470,79 @@ export const resetPassword = asyncHandler(async (req, res) => {
     throw new ApiError(401, 'Reset code is incorrect');
   }
 
+  return challenge;
+};
+
+export const verifyPasswordResetCode = asyncHandler(async (req, res) => {
+  const { email, code, role } = req.body;
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (!emailPattern.test(email || '') || !code) {
+    throw new ApiError(400, 'Email and reset code are required');
+  }
+
+  const user = await User.findOne({ email }).select('+passwordHash');
+  if (!user || user.status !== 'active') {
+    throw new ApiError(401, 'Reset code is invalid or has expired');
+  }
+
+  if (role) {
+    assertExpectedRole({ user, role });
+  }
+
+  const challenge = await findValidPasswordResetChallenge({ user, code });
+  const resetToken = crypto.randomBytes(32).toString('hex');
+
   challenge.consumedAt = new Date();
+  challenge.resetTokenHash = PasswordResetChallenge.hashResetToken(resetToken);
+  challenge.resetTokenExpiresAt = resetTokenExpiry();
+  await challenge.save();
+
+  res.json({
+    message: 'Reset code verified. Set a new password now.',
+    resetToken,
+    expiresAt: challenge.resetTokenExpiresAt
+  });
+});
+
+export const resetPassword = asyncHandler(async (req, res) => {
+  const { email, code, resetToken, password, role } = req.body;
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (!emailPattern.test(email || '') || !password || (!resetToken && !code)) {
+    throw new ApiError(400, 'Email, reset verification, and new password are required');
+  }
+
+  if (password.length < 8) {
+    throw new ApiError(400, 'Use at least 8 characters for the new password');
+  }
+
+  const user = await User.findOne({ email }).select('+passwordHash');
+  if (!user || user.status !== 'active') {
+    throw new ApiError(401, 'Reset verification is invalid or has expired');
+  }
+
+  if (role) {
+    assertExpectedRole({ user, role });
+  }
+
+  let challenge;
+  if (resetToken) {
+    challenge = await PasswordResetChallenge.findOne({
+      user: user._id,
+      resetTokenConsumedAt: { $exists: false },
+      resetTokenExpiresAt: { $gt: new Date() }
+    }).sort({ consumedAt: -1 });
+
+    if (!challenge || !challenge.compareResetToken(resetToken)) {
+      throw new ApiError(401, 'Reset verification is invalid or has expired');
+    }
+  } else {
+    challenge = await findValidPasswordResetChallenge({ user, code });
+    challenge.consumedAt = new Date();
+  }
+
+  challenge.resetTokenConsumedAt = new Date();
   user.passwordHash = await User.hashPassword(password);
 
   await Promise.all([

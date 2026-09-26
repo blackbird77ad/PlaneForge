@@ -1,21 +1,42 @@
 import { useMemo, useState } from 'react';
-import { Building2, GraduationCap, Handshake, Mail, MessageSquareText, Send } from 'lucide-react';
+import { AlertCircle, BookOpen, FileText, Handshake, Mail, MessageSquareText, Package, Send, Wrench } from 'lucide-react';
 import { submitContactInquiry } from '../api/client.js';
 
 const intentOptions = [
   {
-    value: 'learner',
-    label: 'Learner',
-    description: 'Courses, PCB learning path, enrollment, certificates, or where to begin.',
-    icon: GraduationCap,
-    topics: ['Choosing a PCB course', 'Course content question', 'Enrollment or account help', 'Certificate question']
+    value: 'quote',
+    label: 'Quote',
+    description: 'Pricing for consulting, training, PCB review, product, or custom support.',
+    icon: FileText,
+    topics: ['Consulting quote', 'Training quote', 'PCB review quote', 'Product or custom build quote']
   },
   {
-    value: 'b2b',
-    label: 'Company / B2B',
-    description: 'Training, team learning, project support, or company request.',
-    icon: Building2,
-    topics: ['Team PCB training', 'Company project support', 'Hardware product planning', 'Custom learning package']
+    value: 'issue',
+    label: 'Issue',
+    description: 'Account, checkout, course access, product order, or technical issue.',
+    icon: AlertCircle,
+    topics: ['Account access issue', 'Checkout or payment issue', 'Course access issue', 'Product order issue']
+  },
+  {
+    value: 'message',
+    label: 'Message',
+    description: 'Send a direct question, update, request, or note to PlaneForge.',
+    icon: MessageSquareText,
+    topics: ['General message', 'Project question', 'Course question', 'Follow-up message']
+  },
+  {
+    value: 'course',
+    label: 'Courses',
+    description: 'Course path, enrollment, certificates, content, or where to begin.',
+    icon: BookOpen,
+    topics: ['Choosing a PCB course', 'Course content question', 'Enrollment help', 'Certificate question']
+  },
+  {
+    value: 'product',
+    label: 'Products',
+    description: 'Hardware products, digital tools, orders, availability, or custom requests.',
+    icon: Package,
+    topics: ['Product question', 'Order support', 'Availability request', 'Custom product request']
   },
   {
     value: 'collaboration',
@@ -28,15 +49,8 @@ const intentOptions = [
     value: 'consulting',
     label: 'Consulting',
     description: 'PCB project planning, architecture review, troubleshooting, or build support.',
-    icon: MessageSquareText,
+    icon: Wrench,
     topics: ['PCB project review', 'Schematic or layout architecture', 'Troubleshooting support', 'Product build support']
-  },
-  {
-    value: 'partnership',
-    label: 'Partnership',
-    description: 'Business, distribution, institutional, or long-term partnership.',
-    icon: Handshake,
-    topics: ['Institutional partnership', 'Training distribution', 'Business partnership', 'Sponsorship']
   },
   {
     value: 'general',
@@ -48,16 +62,17 @@ const intentOptions = [
 ];
 
 const initialForm = {
-  intent: 'learner',
-  topic: 'Choosing a PCB course',
+  intent: 'quote',
+  topic: 'Consulting quote',
   customTopic: '',
   name: '',
   email: '',
   organization: '',
-  role: '',
   subject: '',
   message: ''
 };
+
+const contactEmails = ['admin@planeforge.org', 'planeforge1@gmail.com'];
 
 export const Contact = () => {
   const [form, setForm] = useState(initialForm);
@@ -118,8 +133,8 @@ export const Contact = () => {
         <p className="eyebrow">Contact PlaneForge</p>
         <h1>Tell us what you need, and we will route it clearly</h1>
         <p>
-          Learners, companies, collaborators, and partners can send focused PCB course or project
-          inquiries with the right category attached from the start.
+          Send a quote request, message, issue report, product question, course question, or PCB
+          project context without choosing a role first.
         </p>
       </div>
 
@@ -127,17 +142,21 @@ export const Contact = () => {
         <article>
           <Mail size={22} />
           <h2>Email</h2>
-          <p>planeforge1@gmail.com</p>
+          {contactEmails.map((email) => (
+            <a href={`mailto:${email}`} key={email}>
+              {email}
+            </a>
+          ))}
         </article>
         <article>
           <MessageSquareText size={22} />
-          <h2>Inquiry Routing</h2>
-          <p>Messages are grouped by intent and topic so PlaneForge can review them faster.</p>
+          <h2>Request Routing</h2>
+          <p>Messages are grouped by request type and topic so PlaneForge can review them faster.</p>
         </article>
       </section>
 
       <form className="contact-form contact-intent-form" onSubmit={submit}>
-        <section className="intent-picker" aria-label="Inquiry intent">
+        <section className="intent-picker" aria-label="Request type">
           {intentOptions.map(({ value, label, description, icon: Icon }) => (
             <button
               className={form.intent === value ? 'active' : ''}
@@ -201,21 +220,17 @@ export const Contact = () => {
               <input value={form.organization} onChange={(event) => update('organization', event.target.value)} placeholder="School, company, or team" />
             </label>
             <label>
-              Role
-              <input value={form.role} onChange={(event) => update('role', event.target.value)} placeholder="Learner, founder, engineer, manager" />
+              Subject
+              <input value={form.subject} onChange={(event) => update('subject', event.target.value)} placeholder="Short summary" required />
             </label>
           </div>
 
-          <label>
-            Subject
-            <input value={form.subject} onChange={(event) => update('subject', event.target.value)} placeholder="Short summary" required />
-          </label>
           <label>
             Message
             <textarea
               value={form.message}
               onChange={(event) => update('message', event.target.value)}
-              placeholder="Share the course question, collaboration idea, company need, timeline, or PCB project context."
+              placeholder="Share the quote details, issue, timeline, order context, course question, or PCB project background."
               required
             />
           </label>

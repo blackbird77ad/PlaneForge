@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { Award, BarChart3, BookOpen, BriefcaseBusiness, CalendarDays, FileText, Inbox, Package, Settings, UserRound } from 'lucide-react';
+import { Award, BarChart3, BookOpen, BriefcaseBusiness, CalendarDays, CreditCard, FileText, Inbox, Package, UserRound, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const navByRole = {
@@ -24,12 +24,18 @@ const navByRole = {
     { to: '/profile', label: 'Profile', icon: UserRound }
   ],
   admin: [
-    { to: '/dashboard/admin', label: 'Overview', icon: BarChart3 },
-    { to: '/dashboard/admin#inquiries', label: 'Inquiries', icon: Inbox },
-    { to: '/dashboard/admin#content', label: 'Content', icon: BookOpen },
-    { to: '/dashboard/admin#products', label: 'Products', icon: Package },
-    { to: '/dashboard/admin#payments', label: 'Payments', icon: FileText },
-    { to: '/dashboard/admin#settings', label: 'Settings', icon: Settings }
+    { to: '/dashboard/admin', label: 'Dashboard', icon: BarChart3 },
+    { to: '/dashboard/admin/courses', label: 'Courses', icon: BookOpen },
+    { to: '/dashboard/admin/products', label: 'Products', icon: Package },
+    { to: '/dashboard/admin/orders', label: 'Orders', icon: FileText },
+    { to: '/dashboard/admin/users', label: 'Users', icon: Users },
+    { to: '/dashboard/admin/payments', label: 'Payments', icon: CreditCard },
+    { to: '/dashboard/admin/articles', label: 'Blog', icon: FileText },
+    { to: '/dashboard/admin/careers', label: 'Careers', icon: BriefcaseBusiness },
+    { to: '/dashboard/admin/consultations', label: 'Consultations', icon: CalendarDays },
+    { to: '/dashboard/admin/inquiries', label: 'Inquiries', icon: Inbox },
+    { to: '/dashboard/admin/reports', label: 'Reports', icon: BarChart3 },
+    { to: '/profile', label: 'Profile', icon: UserRound }
   ]
 };
 
@@ -51,7 +57,7 @@ export const DashboardShell = ({ children, title, subtitle }) => {
         </div>
         <nav>
           {links.map(({ to, label, icon: Icon }) => (
-            <NavLink key={label} to={to}>
+            <NavLink key={label} to={to} end={to === '/dashboard/admin'}>
               <Icon size={18} />
               {label}
             </NavLink>

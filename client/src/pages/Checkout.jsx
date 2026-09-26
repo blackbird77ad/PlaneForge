@@ -13,7 +13,6 @@ export const Checkout = () => {
   const { user, enrollCourse, refreshMe } = useAuth();
   const [course, setCourse] = useState(null);
   const [country, setCountry] = useState('');
-  const [couponCode, setCouponCode] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -31,8 +30,16 @@ export const Checkout = () => {
     return <main className="section page">Loading checkout...</main>;
   }
 
-  const basePrice = Number(course.price || 0);
-  const price = couponCode.toUpperCase() === 'FORGE10' ? basePrice * 0.9 : basePrice;
+  const pricing = course.pricing || {
+    finalPrice: Number(course.price || 0),
+    originalPrice: Number(course.price || 0),
+    isFree: Number(course.price || 0) <= 0
+  };
+  const accessLabel =
+    course.accessDuration?.type === 'limited'
+      ? course.accessDuration.label || `${course.accessDuration.days} days of access`
+      : 'Lifetime course access';
+  const hasDiscount = Number(pricing.discountAmount || 0) > 0;
 
   const submit = async (event) => {
     event.preventDefault();
@@ -45,7 +52,6 @@ export const Checkout = () => {
         courseId: course._id || course.id,
         provider: 'stripe',
         country,
-        couponCode,
         termsAccepted
       });
 
@@ -89,9 +95,10 @@ export const Checkout = () => {
           <div>
             <h2>{course.title}</h2>
             <p>{course.instructorName}</p>
-            <strong>{money(price, course.currency)}</strong>
-            <span>{course.purchaseType === 'subscription' ? 'Course subscription' : 'One-time course access'}</span>
-            {couponCode.toUpperCase() === 'FORGE10' && <span className="form-success">FORGE10 applied.</span>}
+            <strong>{pricing.isFree ? 'Free' : money(pricing.finalPrice, course.currency)}</strong>
+            {hasDiscount && <span className="price-strike">{money(pricing.originalPrice, course.currency)}</span>}
+            <span>{accessLabel}</span>
+            {pricing.discount?.label && <span className="form-success">{pricing.discount.label} applied.</span>}
           </div>
         </section>
 
@@ -101,15 +108,10 @@ export const Checkout = () => {
             <input value={country} onChange={(event) => setCountry(event.target.value)} placeholder="Optional" />
           </label>
 
-          <label>
-            Coupon
-            <input value={couponCode} onChange={(event) => setCouponCode(event.target.value)} placeholder="FORGE10" />
-          </label>
-
           <input type="hidden" name="provider" value="stripe" />
 
           <p className="form-muted">
-            Stripe handles secure card checkout and payment verification.
+            Stripe handles secure card checkout and payment verification. Free courses unlock immediately after this confirmation.
           </p>
 
           <label className="checkbox-row">
@@ -123,7 +125,7 @@ export const Checkout = () => {
 
           <button className="button primary full" type="submit" disabled={!termsAccepted || submitting}>
             <CreditCard size={18} />
-            {submitting ? 'Initializing Payment' : 'Continue to Payment'}
+            {submitting ? 'Initializing Enrollment' : pricing.isFree ? 'Confirm Free Enrollment' : 'Continue to Payment'}
           </button>
 
           <p className="secure-note">

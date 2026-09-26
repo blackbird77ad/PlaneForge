@@ -5,20 +5,23 @@ import {
   CheckCircle,
   CircuitBoard,
   CreditCard,
+  Download,
   Hammer,
   PackageCheck,
   Send,
   ShieldCheck,
   ShoppingCart,
+  Tag,
   Truck
 } from 'lucide-react';
-import { addCartItem, getProduct, submitContactInquiry } from '../api/client.js';
+import { addCartItem, downloadDigitalAsset, getProduct, getProductAccess, submitContactInquiry } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const money = (value, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(Number(value || 0));
 
 const stockLabel = (product) => {
+  if (product?.stock?.label) return product.stock.label;
   if (product?.productType === 'digital') return 'Digital delivery';
   if (!product?.inventory?.track) return 'Available to order';
   const quantity = Number(product.inventory.quantity || 0);
@@ -28,9 +31,9 @@ const stockLabel = (product) => {
 };
 
 const isOutOfStock = (product) =>
-  product?.productType !== 'digital' &&
-  product?.inventory?.track &&
-  Number(product.inventory.quantity || 0) <= 0;
+  product?.stock ? !product.stock.canPurchase : product?.productType !== 'digital' &&
+    product?.inventory?.track &&
+    Number(product.inventory.quantity || 0) <= 0;
 
 const requestInitial = (user) => ({
   name: user?.name || '',
@@ -58,6 +61,10 @@ export const ProductDetails = () => {
   const [requestMessage, setRequestMessage] = useState('');
   const [requestError, setRequestError] = useState('');
   const [requestBusy, setRequestBusy] = useState(false);
+  const [accessAssets, setAccessAssets] = useState([]);
+  const [accessMessage, setAccessMessage] = useState('');
+  const [accessError, setAccessError] = useState('');
+  const [accessBusy, setAccessBusy] = useState('');
 
   useEffect(() => {
     setProduct(null);
@@ -115,6 +122,13 @@ export const ProductDetails = () => {
   const safeQuantity = Math.min(Math.max(1, Number(quantity || 1)), quantityLimit);
   const unavailable = isOutOfStock(product);
   const image = selectedImage || product.thumbnail || galleryImages[0] || '/favicon.png';
+  const pricing = product.pricing || {
+    finalPrice: product.price,
+    originalPrice: product.price,
+    onSale: false,
+    percentageOff: 0
+  };
+  const specs = Array.isArray(product.specifications) ? product.specifications.filter((item) => item.label || item.value) : [];
 
   const buyProduct = () => {
     const checkoutPath = `/checkout/product/${product.slug}`;
@@ -148,6 +162,45 @@ export const ProductDetails = () => {
       setCartError(err.message);
     } finally {
       setCartBusy(false);
+    }
+  };
+
+  const loadDigitalAccess = async () => {
+    setAccessMessage('');
+    setAccessError('');
+    if (!user) {
+      navigate('/login', { state: { from: `/products/${product.slug}` } });
+      return;
+    }
+    setAccessBusy('access');
+    try {
+      const data = await getProductAccess(product.slug);
+      setAccessAssets(data.product?.digitalAssets || []);
+      setAccessMessage('Digital access verified.');
+    } catch (err) {
+      setAccessError(err.message);
+    } finally {
+      setAccessBusy('');
+    }
+  };
+
+  const downloadAsset = async (asset) => {
+    setAccessError('');
+    setAccessBusy(asset._id);
+    try {
+      const { blob, fileName } = await downloadDigitalAsset({ slug: product.slug, assetId: asset._id });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName || asset.fileName || asset.label || 'planeforge-download';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setAccessError(err.message);
+    } finally {
+      setAccessBusy('');
     }
   };
 
@@ -227,7 +280,12 @@ export const ProductDetails = () => {
           </div>
         </div>
         <aside className="enroll-panel product-buy-panel">
-          <strong>{money(product.price, product.currency)}</strong>
+          <strong>{pricing.isFree ? 'Free' : money(pricing.finalPrice, product.currency)}</strong>
+          {pricing.onSale && (
+            <span className="price-strike">
+              {money(pricing.originalPrice, product.currency)} / {pricing.percentageOff}% off
+            </span>
+          )}
           <p>{product.productType === 'digital' ? 'Download or digital delivery after payment.' : 'Hardware product order.'}</p>
           <label>
             Quantity
@@ -252,8 +310,16 @@ export const ProductDetails = () => {
             <Hammer size={18} />
             Request Similar Build
           </a>
+          {product.productType === 'digital' && (
+            <button className="button ghost full" type="button" onClick={loadDigitalAccess} disabled={accessBusy === 'access'}>
+              <Download size={18} />
+              {accessBusy === 'access' ? 'Checking Access' : 'Access Purchased Files'}
+            </button>
+          )}
           {cartMessage && <p className="form-success">{cartMessage}</p>}
           {cartError && <p className="form-error">{cartError}</p>}
+          {accessMessage && <p className="form-success">{accessMessage}</p>}
+          {accessError && <p className="form-error">{accessError}</p>}
           <span>
             <ShieldCheck size={16} /> Secure checkout through Stripe.
           </span>
@@ -282,12 +348,13 @@ export const ProductDetails = () => {
           </div>
 
           <h2>Product Details</h2>
+          <p>{product.shortDescription || product.description}</p>
           <p>{product.description}</p>
 
           <div className="check-grid product-check-grid">
             <span>
-              <CheckCircle size={17} />
-              Published product managed by PlaneForge admin
+              <Tag size={17} />
+              {product.brand || product.subcategory || product.category}
             </span>
             <span>
               <PackageCheck size={17} />
@@ -302,6 +369,43 @@ export const ProductDetails = () => {
               Similar custom builds can be requested below
             </span>
           </div>
+          {!!specs.length && (
+            <>
+              <h2>Specifications</h2>
+              <div className="product-spec-grid">
+                {specs.map((item) => (
+                  <div key={`${item.label}-${item.value}`}>
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {product.productType === 'digital' && (
+            <section className="dashboard-section digital-access-panel">
+              <h2>
+                <Download size={20} /> Digital delivery
+              </h2>
+              <p>{product.digitalDelivery?.instructions || 'Digital files unlock after verified payment.'}</p>
+              {accessAssets.length ? (
+                <div className="lesson-resource-grid">
+                  {accessAssets.map((asset) => (
+                    <button className="digital-asset-button" type="button" key={asset._id} onClick={() => downloadAsset(asset)} disabled={Boolean(accessBusy)}>
+                      <Download size={17} />
+                      <span>{asset.label}</span>
+                      <small>{asset.fileName || asset.type || 'file'}</small>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <button className="button ghost small" type="button" onClick={loadDigitalAccess} disabled={accessBusy === 'access'}>
+                  <Download size={16} />
+                  Verify Access
+                </button>
+              )}
+            </section>
+          )}
         </article>
 
         <aside className="contact-form product-request-form" id="request-similar">
@@ -339,7 +443,7 @@ export const ProductDetails = () => {
               <input
                 value={requestForm.role}
                 onChange={(event) => updateRequest('role', event.target.value)}
-                placeholder="Founder, engineer, learner, manager"
+                placeholder="Founder, engineer, buyer, manager"
               />
             </label>
             <label>

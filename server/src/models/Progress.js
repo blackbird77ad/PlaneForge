@@ -59,6 +59,7 @@ const progressSchema = new mongoose.Schema(
       type: Number,
       default: 0
     },
+    completedAt: Date,
     lastAccessedAt: Date,
     certificateIssued: {
       type: Boolean,

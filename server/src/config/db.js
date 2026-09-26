@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import dns from 'dns';
 import { env } from './env.js';
 
 let reconnectTimer;
@@ -16,6 +17,9 @@ export const databaseStatus = () => {
 
 export const connectDb = async () => {
   mongoose.set('strictQuery', true);
+  if (env.mongoDnsServers.length) {
+    dns.setServers(env.mongoDnsServers);
+  }
 
   if (isDbConnected()) return true;
   if (mongoose.connection.readyState === 2) return false;

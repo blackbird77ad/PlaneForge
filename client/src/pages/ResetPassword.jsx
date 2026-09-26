@@ -7,11 +7,15 @@ import { PasswordField } from '../components/PasswordField.jsx';
 export const ResetPassword = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { startPasswordReset, finishPasswordReset } = useAuth();
-  const [step, setStep] = useState('request');
+  const { startPasswordReset, verifyPasswordResetCode, finishPasswordReset } = useAuth();
+  const query = new URLSearchParams(location.search);
+  const initialCode = query.get('code') || '';
+  const initialEmail = location.state?.email || query.get('email') || '';
+  const [step, setStep] = useState(initialCode ? 'verify' : 'request');
   const [form, setForm] = useState({
-    email: location.state?.email || '',
-    code: '',
+    email: initialEmail,
+    code: initialCode,
+    resetToken: '',
     password: '',
     confirmPassword: ''
   });
@@ -29,7 +33,18 @@ export const ResetPassword = () => {
       if (step === 'request') {
         const data = await startPasswordReset({ email: form.email });
         setMessage(data.message);
-        setStep('reset');
+        setStep('verify');
+        return;
+      }
+
+      if (step === 'verify') {
+        const data = await verifyPasswordResetCode({
+          email: form.email,
+          code: form.code
+        });
+        setForm((current) => ({ ...current, resetToken: data.resetToken || '' }));
+        setMessage(data.message || 'Reset code verified. Set a new password now.');
+        setStep('password');
         return;
       }
 
@@ -45,7 +60,7 @@ export const ResetPassword = () => {
 
       const data = await finishPasswordReset({
         email: form.email,
-        code: form.code,
+        resetToken: form.resetToken,
         password: form.password
       });
       setMessage(data.message);
@@ -61,11 +76,19 @@ export const ResetPassword = () => {
     <main className="auth-page">
       <section className="auth-panel">
         <p className="eyebrow">Reset password</p>
-        <h1>{step === 'request' ? 'Request a reset code' : 'Create a new password'}</h1>
+        <h1>
+          {step === 'request'
+            ? 'Request a reset code'
+            : step === 'verify'
+              ? 'Enter your reset code'
+              : 'Create a new password'}
+        </h1>
         <p>
           {step === 'request'
             ? 'Enter the email address for your PlaneForge account, then PlaneForge will send a one-time reset code.'
-            : 'Enter the reset code from your email and set a new password.'}
+            : step === 'verify'
+              ? 'Enter the one-time code from your email. The code can only be used once.'
+              : 'Set a new password for this account.'}
         </p>
         <form onSubmit={submit}>
           <label>
@@ -75,20 +98,31 @@ export const ResetPassword = () => {
               onChange={(event) => setForm({ ...form, email: event.target.value })}
               type="email"
               required
-              disabled={step === 'reset'}
+              disabled={step !== 'request'}
             />
           </label>
 
-          {step === 'reset' && (
+          {step === 'verify' && (
+            <label>
+              Reset code
+              <input
+                value={form.code}
+                onChange={(event) => setForm({ ...form, code: event.target.value })}
+                inputMode="numeric"
+                maxLength={6}
+                required
+              />
+            </label>
+          )}
+
+          {step === 'password' && (
             <>
               <label>
-                Reset code
+                Verified reset code
                 <input
                   value={form.code}
-                  onChange={(event) => setForm({ ...form, code: event.target.value })}
-                  inputMode="numeric"
-                  maxLength={6}
-                  required
+                  readOnly
+                  disabled
                 />
               </label>
               <PasswordField
@@ -110,11 +144,26 @@ export const ResetPassword = () => {
           {error && <p className="form-error">{error}</p>}
           <button className="button primary full" type="submit" disabled={busy}>
             {step === 'request' ? <RotateCcw size={18} /> : <KeyRound size={18} />}
-            {busy ? 'Please wait' : step === 'request' ? 'Send Reset Code' : 'Reset Password'}
+            {busy
+              ? 'Please wait'
+              : step === 'request'
+                ? 'Send Reset Code'
+                : step === 'verify'
+                  ? 'Verify Code'
+                  : 'Reset Password'}
           </button>
         </form>
-        {step === 'reset' && (
-          <button className="button ghost full auth-secondary" type="button" onClick={() => setStep('request')}>
+        {step !== 'request' && (
+          <button
+            className="button ghost full auth-secondary"
+            type="button"
+            onClick={() => {
+              setStep('request');
+              setForm((current) => ({ ...current, code: '', resetToken: '', password: '', confirmPassword: '' }));
+              setMessage('');
+              setError('');
+            }}
+          >
             Request a new code
           </button>
         )}

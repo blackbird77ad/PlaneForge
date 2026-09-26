@@ -12,7 +12,7 @@ import {
   Star,
   Users
 } from 'lucide-react';
-import { addCartItem, getCourse } from '../api/client.js';
+import { addCartItem, enrollFreeCourse, getCourse } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const money = (value, currency = 'USD') =>
@@ -33,10 +33,12 @@ const lessonState = (lesson, ownsCourse) => {
 export const CourseDetails = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, refreshMe } = useAuth();
   const [course, setCourse] = useState(null);
   const [status, setStatus] = useState('loading');
   const [openModule, setOpenModule] = useState(0);
+  const [accessBusy, setAccessBusy] = useState(false);
+  const [accessError, setAccessError] = useState('');
   const [cartMessage, setCartMessage] = useState('');
   const [cartError, setCartError] = useState('');
   const [cartBusy, setCartBusy] = useState(false);
@@ -80,15 +82,43 @@ export const CourseDetails = () => {
   const studentsEnrolled = Number(course.studentsEnrolled || 0);
   const hasStudents = studentsEnrolled > 0;
   const modules = Array.isArray(course.modules) ? course.modules : [];
+  const pricing = course.pricing || {
+    finalPrice: Number(course.price || 0),
+    originalPrice: Number(course.price || 0),
+    isFree: Number(course.price || 0) <= 0
+  };
+  const accessLabel =
+    course.accessDuration?.type === 'limited'
+      ? course.accessDuration.label || `${course.accessDuration.days} days of access`
+      : 'Lifetime course access';
+  const priceLabel = pricing.isFree ? 'Free' : money(pricing.finalPrice, course.currency);
+  const hasDiscount = Number(pricing.discountAmount || 0) > 0;
 
-  const action = () => {
+  const action = async () => {
+    setAccessError('');
+
     if (ownsCourse) {
       navigate(`/learn/${course.slug}`);
       return;
     }
 
     if (!user) {
-      navigate('/login', { state: { from: `/checkout/${course.slug}` } });
+      navigate('/login', { state: { from: pricing.isFree ? `/courses/${course.slug}` : `/checkout/${course.slug}` } });
+      return;
+    }
+
+    if (pricing.isFree) {
+      setAccessBusy(true);
+      try {
+        const data = await enrollFreeCourse(course.slug);
+        if (data.course) setCourse(data.course);
+        await refreshMe().catch(() => null);
+        navigate(`/learn/${course.slug}`);
+      } catch (err) {
+        setAccessError(err.message);
+      } finally {
+        setAccessBusy(false);
+      }
       return;
     }
 
@@ -101,6 +131,11 @@ export const CourseDetails = () => {
 
     if (ownsCourse) {
       navigate(`/learn/${course.slug}`);
+      return;
+    }
+
+    if (pricing.isFree) {
+      await action();
       return;
     }
 
@@ -154,19 +189,26 @@ export const CourseDetails = () => {
           </div>
         </div>
         <aside className="enroll-panel">
-          <strong>{money(course.price, course.currency)}</strong>
-          <p>{course.purchaseType === 'subscription' ? 'Subscription access for this course' : 'One-time course access'}</p>
+          <strong>{priceLabel}</strong>
+          {hasDiscount && (
+            <span className="price-strike">
+              {money(pricing.originalPrice, course.currency)}
+              {pricing.discount?.label ? ` / ${pricing.discount.label}` : ''}
+            </span>
+          )}
+          <p>{accessLabel}</p>
           <p>Instructor: {course.instructor?.name || course.instructorName}</p>
-          <button className="button primary full" type="button" onClick={action}>
-            {ownsCourse ? <PlayCircle size={18} /> : <CreditCard size={18} />}
-            {ownsCourse ? 'Continue Learning' : 'Enroll Now'}
+          <button className="button primary full" type="button" onClick={action} disabled={accessBusy}>
+            {ownsCourse ? <PlayCircle size={18} /> : pricing.isFree ? <CheckCircle size={18} /> : <CreditCard size={18} />}
+            {accessBusy ? 'Unlocking' : ownsCourse ? 'Continue Learning' : pricing.isFree ? 'Enroll Free' : 'Enroll Now'}
           </button>
-          {!ownsCourse && (
+          {!ownsCourse && !pricing.isFree && (
             <button className="button ghost full" type="button" onClick={addCourseToCart} disabled={cartBusy}>
               <ShoppingCart size={18} />
               {cartBusy ? 'Adding' : 'Add to Cart'}
             </button>
           )}
+          {accessError && <p className="form-error">{accessError}</p>}
           {cartMessage && <p className="form-success">{cartMessage}</p>}
           {cartError && <p className="form-error">{cartError}</p>}
           <span>
@@ -250,9 +292,11 @@ export const CourseDetails = () => {
               <h2>Reviews</h2>
               <div className="review-list">
                 {course.reviews.map((review) => (
-                  <article key={review.studentName}>
+                  <article key={review._id || `${review.studentName}-${review.createdAt}`}>
                     <strong>{review.studentName}</strong>
-                    <span>{review.occupation}</span>
+                    <span>
+                      <Star size={15} fill="currentColor" /> {review.rating}/5
+                    </span>
                     <p>{review.comment}</p>
                   </article>
                 ))}

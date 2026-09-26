@@ -10,6 +10,7 @@ import {
   registerRequest,
   resendLoginCodeRequest,
   updateProfileRequest,
+  verifyPasswordResetCodeRequest,
   verifyLoginRequest
 } from '../api/client.js';
 import { safeLocalStorage } from '../utils/storage.js';
@@ -142,6 +143,8 @@ export const AuthProvider = ({ children }) => {
 
   const startPasswordReset = (payload) => requestPasswordReset(payload);
 
+  const verifyPasswordResetCode = (payload) => verifyPasswordResetCodeRequest(payload);
+
   const finishPasswordReset = (payload) => completePasswordReset(payload);
 
   const startProfileChange = (payload) => requestProfileChange(payload);
@@ -168,6 +171,7 @@ export const AuthProvider = ({ children }) => {
       updateUser,
       refreshMe,
       startPasswordReset,
+      verifyPasswordResetCode,
       finishPasswordReset,
       startProfileChange,
       finishProfileChange,

@@ -13,6 +13,7 @@ import { Consultations } from './pages/Consultations.jsx';
 import { Contact } from './pages/Contact.jsx';
 import { CourseDetails } from './pages/CourseDetails.jsx';
 import { Courses } from './pages/Courses.jsx';
+import { CareerDetails, Careers } from './pages/Careers.jsx';
 import { Home } from './pages/Home.jsx';
 import { LearningPlayer } from './pages/LearningPlayer.jsx';
 import { Login } from './pages/Login.jsx';
@@ -83,6 +84,8 @@ const App = () => (
         <Route path="/products" element={<Products />} />
         <Route path="/products/:slug" element={<ProductDetails />} />
         <Route path="/consultations" element={<Consultations />} />
+        <Route path="/careers" element={<Careers />} />
+        <Route path="/careers/:slug" element={<CareerDetails />} />
         <Route path="/blog" element={<Blog />} />
         <Route path="/about" element={<About />} />
         <Route path="/contact" element={<Contact />} />
@@ -147,6 +150,14 @@ const App = () => (
         <Route path="/dashboard/student" element={<Navigate to="/dashboard/user" replace />} />
         <Route
           path="/dashboard/admin"
+          element={
+            <ProtectedRoute roles={['admin']}>
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/dashboard/admin/:section"
           element={
             <ProtectedRoute roles={['admin']}>
               <AdminDashboard />

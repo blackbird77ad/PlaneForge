@@ -9,12 +9,16 @@ const adminAccounts = [
   },
   {
     name: 'Evans Honu',
-    email: 'evans@planeforge.org',
+    email: 'admin@planeforge.org',
     dateOfBirth: new Date('1998-10-28T00:00:00.000Z')
   }
 ];
 
-await connectDb();
+const connected = await connectDb();
+if (!connected) {
+  console.error('PlaneForge admin bootstrap aborted because MongoDB is not connected.');
+  process.exit(1);
+}
 
 const passwordHash = await User.hashPassword('Planeforge@26');
 

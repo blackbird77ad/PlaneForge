@@ -26,7 +26,10 @@ const passwordResetChallengeSchema = new mongoose.Schema(
       required: true,
       index: true
     },
-    consumedAt: Date
+    consumedAt: Date,
+    resetTokenHash: String,
+    resetTokenExpiresAt: Date,
+    resetTokenConsumedAt: Date
   },
   { timestamps: true }
 );
@@ -37,6 +40,14 @@ passwordResetChallengeSchema.statics.hashCode = function hashCode(code) {
 
 passwordResetChallengeSchema.methods.compareCode = function compareCode(code) {
   return this.codeHash === this.constructor.hashCode(code);
+};
+
+passwordResetChallengeSchema.statics.hashResetToken = function hashResetToken(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('hex');
+};
+
+passwordResetChallengeSchema.methods.compareResetToken = function compareResetToken(token) {
+  return this.resetTokenHash === this.constructor.hashResetToken(token);
 };
 
 export const PasswordResetChallenge = mongoose.model(

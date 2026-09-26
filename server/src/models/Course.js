@@ -96,13 +96,31 @@ const reviewSchema = new mongoose.Schema(
     studentName: String,
     avatar: String,
     occupation: String,
+    displayNamePublic: {
+      type: Boolean,
+      default: true
+    },
+    anonymous: {
+      type: Boolean,
+      default: false
+    },
     rating: {
       type: Number,
       min: 1,
       max: 5,
       default: 5
     },
-    comment: String
+    comment: String,
+    status: {
+      type: String,
+      enum: ['pending', 'approved', 'declined'],
+      default: 'approved'
+    },
+    moderatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    moderatedAt: Date
   },
   { timestamps: true }
 );
@@ -126,6 +144,8 @@ const courseSchema = new mongoose.Schema(
     },
     thumbnail: String,
     bannerImage: String,
+    images: [String],
+    videoUrl: String,
     category: {
       type: String,
       required: true
@@ -207,9 +227,42 @@ const courseSchema = new mongoose.Schema(
       {
         label: String,
         url: String,
-        type: String
+        type: String,
+        size: Number,
+        downloadable: {
+          type: Boolean,
+          default: true
+        }
       }
     ],
+    accessDurationType: {
+      type: String,
+      enum: ['lifetime', 'limited'],
+      default: 'lifetime'
+    },
+    accessDurationDays: {
+      type: Number,
+      default: null,
+      min: 1
+    },
+    discount: {
+      enabled: {
+        type: Boolean,
+        default: false
+      },
+      type: {
+        type: String,
+        enum: ['percentage', 'fixed'],
+        default: 'percentage'
+      },
+      value: {
+        type: Number,
+        default: 0,
+        min: 0
+      },
+      startsAt: Date,
+      endsAt: Date
+    },
     isFeatured: {
       type: Boolean,
       default: false
@@ -243,6 +296,15 @@ courseSchema.index({
 courseSchema.pre('validate', function setSlug(next) {
   if (!this.slug && this.title) {
     this.slug = slugify(this.title, { lower: true, strict: true });
+  }
+  if (this.accessDurationType === 'lifetime') {
+    this.accessDurationDays = null;
+  }
+  if (this.discount?.type === 'percentage' && Number(this.discount.value || 0) > 100) {
+    this.invalidate('discount.value', 'Discount percentage cannot exceed 100');
+  }
+  if (this.discount?.startsAt && this.discount?.endsAt && this.discount.endsAt < this.discount.startsAt) {
+    this.invalidate('discount.endsAt', 'Discount end date cannot be before the start date');
   }
   next();
 });

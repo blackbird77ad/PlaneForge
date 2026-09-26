@@ -57,7 +57,7 @@ export const NewsletterForm = ({ compact = false }) => {
       {status && (
         <p className="form-success newsletter-success">
           {status}
-          {!compact && <span> Free PCB checklist and beginner guide will be sent with new learner updates.</span>}
+          {!compact && <span> Free PCB checklist and beginner guide will be sent with new user updates.</span>}
         </p>
       )}
     </form>

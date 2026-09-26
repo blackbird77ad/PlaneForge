@@ -71,6 +71,12 @@ export const getCourses = async (params = {}) => {
 
 export const getCourse = (slug) => request(`/courses/${slug}`);
 
+export const enrollFreeCourse = (slug) =>
+  request(`/courses/${slug}/enroll`, {
+    method: 'POST',
+    body: JSON.stringify({})
+  });
+
 export const getProducts = async (params = {}) => {
   const query = new URLSearchParams(
     Object.entries(params).filter(([, value]) => value !== '' && value !== undefined && value !== null)
@@ -81,6 +87,26 @@ export const getProducts = async (params = {}) => {
 
 export const getProduct = (slug) => request(`/products/${slug}`);
 
+export const getProductAccess = (slug) => request(`/products/${slug}/access`);
+
+export const downloadDigitalAsset = async ({ slug, assetId }) => {
+  const response = await fetch(`${API_URL}/products/${slug}/assets/${assetId}/download`, {
+    headers: {
+      'X-Device-Id': getDeviceId(),
+      ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {})
+    }
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.message || 'Download failed');
+  }
+
+  const blob = await response.blob();
+  const disposition = response.headers.get('content-disposition') || '';
+  const fileName = disposition.match(/filename="([^"]+)"/)?.[1] || 'planeforge-download';
+  return { blob, fileName };
+};
+
 export const getLearningCourse = (slug) => request(`/courses/${slug}/learn`);
 
 export const getLessonPlayback = (slug, lessonId) =>
@@ -90,6 +116,12 @@ export const getCourseComments = (slug) => request(`/courses/${slug}/comments`);
 
 export const createCourseComment = (slug, payload) =>
   request(`/courses/${slug}/comments`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+
+export const submitCourseReview = (slug, payload) =>
+  request(`/courses/${slug}/reviews`, {
     method: 'POST',
     body: JSON.stringify(payload)
   });
@@ -125,6 +157,22 @@ export const getConsultants = () => request('/consultations/consultants');
 
 export const getArticles = () => request('/content/articles');
 
+export const getCareers = (params = {}) => {
+  const query = new URLSearchParams(
+    Object.entries(params).filter(([, value]) => value !== '' && value !== undefined && value !== null)
+  ).toString();
+
+  return request(`/careers${query ? `?${query}` : ''}`);
+};
+
+export const getCareer = (slug) => request(`/careers/${slug}`);
+
+export const submitCareerApplication = (slug, payload) =>
+  request(`/careers/${slug}/apply`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+
 export const subscribeNewsletter = (email) =>
   request('/content/newsletter', {
     method: 'POST',
@@ -143,10 +191,10 @@ export const checkoutCourse = async ({ courseId, provider, couponCode, termsAcce
     body: JSON.stringify({ courseId, provider, couponCode, termsAccepted, country })
   });
 
-export const checkoutProduct = async ({ productId, provider, couponCode, termsAccepted, quantity }) =>
+export const checkoutProduct = async ({ productId, provider, termsAccepted, quantity, shippingAddress }) =>
   request('/payments/checkout-product', {
     method: 'POST',
-    body: JSON.stringify({ productId, provider, couponCode, termsAccepted, quantity })
+    body: JSON.stringify({ productId, provider, termsAccepted, quantity, shippingAddress })
   });
 
 export const bookConsultation = (payload) =>
@@ -181,6 +229,12 @@ export const resendLoginCodeRequest = (payload) =>
 
 export const requestPasswordReset = (payload) =>
   request('/auth/password-reset/request', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+
+export const verifyPasswordResetCodeRequest = (payload) =>
+  request('/auth/password-reset/verify', {
     method: 'POST',
     body: JSON.stringify(payload)
   });
@@ -236,6 +290,14 @@ export const getAdminActivity = (params = {}) => {
 };
 
 export const getAdminContent = () => request('/admin/content');
+
+export const getAdminProducts = (params = {}) => {
+  const query = new URLSearchParams(
+    Object.entries(params).filter(([, value]) => value !== '' && value !== undefined && value !== null)
+  ).toString();
+
+  return request(`/admin/products${query ? `?${query}` : ''}`);
+};
 
 export const getAdminUsers = (params = {}) => {
   const query = new URLSearchParams(
@@ -329,13 +391,62 @@ export const updateAdminInquiry = (inquiryId, payload) =>
     body: JSON.stringify(payload)
   });
 
-export const getAdminSettings = () => request('/admin/settings');
+export const getAdminReviews = (params = {}) => {
+  const query = new URLSearchParams(
+    Object.entries(params).filter(([, value]) => value !== '' && value !== undefined && value !== null)
+  ).toString();
 
-export const upsertAdminSetting = (payload) =>
-  request('/admin/settings', {
-    method: 'PUT',
+  return request(`/admin/reviews${query ? `?${query}` : ''}`);
+};
+
+export const updateAdminReview = ({ courseId, reviewId, status }) =>
+  request(`/admin/reviews/${courseId}/${reviewId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status })
+  });
+
+export const getAdminCareerPositions = (params = {}) => {
+  const query = new URLSearchParams(
+    Object.entries(params).filter(([, value]) => value !== '' && value !== undefined && value !== null)
+  ).toString();
+
+  return request(`/admin/careers/positions${query ? `?${query}` : ''}`);
+};
+
+export const createAdminCareerPosition = (payload) =>
+  request('/admin/careers/positions', {
+    method: 'POST',
     body: JSON.stringify(payload)
   });
+
+export const updateAdminCareerPosition = (positionId, payload) =>
+  request(`/admin/careers/positions/${positionId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
+  });
+
+export const duplicateAdminCareerPosition = (positionId) =>
+  request(`/admin/careers/positions/${positionId}/duplicate`, {
+    method: 'POST',
+    body: JSON.stringify({})
+  });
+
+export const getAdminCareerApplications = (params = {}) => {
+  const query = new URLSearchParams(
+    Object.entries(params).filter(([, value]) => value !== '' && value !== undefined && value !== null)
+  ).toString();
+
+  return request(`/admin/careers/applications${query ? `?${query}` : ''}`);
+};
+
+export const updateAdminCareerApplication = (applicationId, payload) =>
+  request(`/admin/careers/applications/${applicationId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload)
+  });
+
+export const getAdminCareerDocument = (applicationId, documentId) =>
+  request(`/admin/careers/applications/${applicationId}/documents/${documentId}`);
 
 export const createAdminCourse = (payload) =>
   request('/courses', {

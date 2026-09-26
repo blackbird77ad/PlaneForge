@@ -11,6 +11,10 @@ dotenv.config();
 export const env = {
   port: process.env.PORT || 5000,
   mongoUri: process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/planeforge',
+  mongoDnsServers: (process.env.MONGO_DNS_SERVERS || '8.8.8.8,1.1.1.1')
+    .split(',')
+    .map((server) => server.trim())
+    .filter(Boolean),
   mongoServerSelectionTimeoutMs: Number(process.env.MONGO_SERVER_SELECTION_TIMEOUT_MS || 5000),
   mongoReconnectIntervalMs: Number(process.env.MONGO_RECONNECT_INTERVAL_MS || 30000),
   jwtSecret: process.env.JWT_SECRET || 'replace-this-development-secret',
@@ -20,7 +24,8 @@ export const env = {
     sessionTtlDays: Number(process.env.AUTH_SESSION_TTL_DAYS || 3),
     loginCodeTtlMinutes: Number(process.env.LOGIN_CODE_TTL_MINUTES || 10),
     resetCodeTtlMinutes: Number(process.env.RESET_CODE_TTL_MINUTES || 10),
-    adminSetupCode: process.env.ADMIN_SETUP_CODE
+    adminSetupCode: process.env.ADMIN_SETUP_CODE,
+    adminSelfSignupLimit: Number(process.env.ADMIN_SELF_SIGNUP_LIMIT || 2)
   },
   corsAllowedOrigins: (process.env.CORS_ALLOWED_ORIGINS || '*')
     .split(',')

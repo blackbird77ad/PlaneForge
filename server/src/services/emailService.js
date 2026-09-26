@@ -72,7 +72,7 @@ export const sendLoginCodeEmail = ({ user, code, expiresAt }) =>
     `
   });
 
-export const sendPasswordResetCodeEmail = ({ user, code, expiresAt }) =>
+export const sendPasswordResetCodeEmail = ({ user, code, expiresAt, resetUrl }) =>
   sendEmail({
     to: user.email,
     subject: 'Reset your PlaneForge password',
@@ -81,6 +81,7 @@ export const sendPasswordResetCodeEmail = ({ user, code, expiresAt }) =>
       <h1>Password reset code</h1>
       <p>Hello ${user.name}, use this one-time code to reset your PlaneForge password:</p>
       <p style="font-size: 28px; font-weight: 700; letter-spacing: 6px;">${code}</p>
+      ${resetUrl ? `<p>You can also open this secure reset link: <a href="${resetUrl}">Reset your password</a></p>` : ''}
       <p>This code expires at <strong>${expiresAt.toUTCString()}</strong>.</p>
       <p>If you did not request a password reset, you can ignore this email.</p>
     `

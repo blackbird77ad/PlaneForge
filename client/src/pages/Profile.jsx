@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { Camera, LoaderCircle, Save, Trash2, UserRound } from 'lucide-react';
 import { uploadImageAsset } from '../api/client.js';
 import { DashboardShell } from '../components/DashboardShell.jsx';
+import { PhoneNumberField } from '../components/PhoneNumberField.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { getContactNumberError } from '../utils/contactNumber.js';
 
 const emptyForm = {
   name: '',
@@ -101,6 +103,12 @@ export const Profile = () => {
     setStatus({ type: '', message: '' });
 
     try {
+      const contactNumberError = getContactNumberError(form.contactNumber);
+      if (contactNumberError) {
+        setStatus({ type: 'error', message: contactNumberError });
+        return;
+      }
+
       const data = await startProfileChange({
         contactNumber: form.contactNumber,
         dateOfBirth: form.dateOfBirth
@@ -228,10 +236,13 @@ export const Profile = () => {
         <fieldset className="profile-secure-change">
           <legend>Verified account details</legend>
           <div className="profile-grid">
-            <label>
-              Contact number
-              <input value={form.contactNumber} onChange={setField('contactNumber')} type="tel" />
-            </label>
+            <PhoneNumberField
+              value={form.contactNumber}
+              onChange={(contactNumber) => {
+                setStatus({ type: '', message: '' });
+                setForm((current) => ({ ...current, contactNumber }));
+              }}
+            />
             <label>
               Date of birth
               <input value={form.dateOfBirth} onChange={setField('dateOfBirth')} type="date" />
@@ -271,7 +282,7 @@ export const Profile = () => {
           </label>
           <label>
             Professional title
-            <input value={form.title} onChange={setField('title')} placeholder="PCB design learner" />
+            <input value={form.title} onChange={setField('title')} placeholder="PCB design practitioner" />
           </label>
           <label>
             Organization

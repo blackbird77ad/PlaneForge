@@ -11,6 +11,15 @@ export const CourseCard = ({ course }) => {
   const hasStudents = studentsEnrolled > 0;
   const title = safeCourse.title || 'PlaneForge course';
   const slug = safeCourse.slug || safeCourse._id || safeCourse.id || 'courses';
+  const pricing = safeCourse.pricing || {
+    finalPrice: safeCourse.price,
+    originalPrice: safeCourse.price,
+    isFree: Number(safeCourse.price || 0) <= 0
+  };
+  const accessLabel =
+    safeCourse.accessDuration?.type === 'limited'
+      ? safeCourse.accessDuration.label || `${safeCourse.accessDuration.days} days`
+      : '';
 
   return (
     <article className="course-card">
@@ -44,12 +53,15 @@ export const CourseCard = ({ course }) => {
         </div>
         <div className="card-footer">
           <strong>
-            {safeCourse.price == null
+            {pricing.finalPrice == null
               ? 'Course access'
-              : Number(safeCourse.price)
-                ? money(safeCourse.price, safeCourse.currency)
-                : 'Free'}
-            {safeCourse.purchaseType === 'subscription' ? ' / course pass' : ''}
+              : pricing.isFree
+                ? 'Free'
+                : money(pricing.finalPrice, safeCourse.currency)}
+            {Number(pricing.discountAmount || 0) > 0
+              ? ` (was ${money(pricing.originalPrice, safeCourse.currency)})`
+              : ''}
+            {accessLabel ? ` / ${accessLabel}` : ''}
           </strong>
           <Link className="button ghost small" to={`/courses/${slug}`}>
             View Details

@@ -6,7 +6,7 @@ Built by [The BrandHelper](https://thebrandhelper.com).
 
 ## What It Does
 
-PlaneForge gives learners one place to discover PCB courses, enroll through verified payments, stream course material, track lesson progress, and manage certificates. Students can request guidance, book engineering consultations, save cart items, and review their account activity from a role-aware dashboard.
+PlaneForge gives users one place to discover PCB courses, buy products, enroll through verified payments, stream course material, track lesson progress, and manage certificates. Users can request guidance, book engineering consultations, save cart items, and review account activity from a unified dashboard.
 
 Admins manage the operating side of the platform through database-backed CRUD tools for courses, lessons, products, articles, users, enrollments, consultations, inquiries, payments, expenses, earnings, and settings. Consultants and partners have their own dashboards for bookings, earnings, and platform activity.
 

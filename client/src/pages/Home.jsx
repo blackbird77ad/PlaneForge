@@ -129,6 +129,11 @@ const useHomepageSeo = () => {
           contactPoint: [
             {
               '@type': 'ContactPoint',
+              email: 'admin@planeforge.org',
+              contactType: 'customer support'
+            },
+            {
+              '@type': 'ContactPoint',
               email: 'planeforge1@gmail.com',
               contactType: 'customer support'
             }

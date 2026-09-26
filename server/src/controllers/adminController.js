@@ -4,6 +4,7 @@ import { Consultation } from '../models/Consultation.js';
 import { ContactInquiry } from '../models/ContactInquiry.js';
 import { Course } from '../models/Course.js';
 import { CourseComment } from '../models/CourseComment.js';
+import { DigitalEntitlement } from '../models/DigitalEntitlement.js';
 import { Earning } from '../models/Earning.js';
 import { Enrollment } from '../models/Enrollment.js';
 import { NewsletterSubscription } from '../models/NewsletterSubscription.js';
@@ -17,16 +18,19 @@ import { grantCourseAccess, isEnrollmentActive } from '../services/accessService
 import { createOrderEarnings } from '../services/revenueService.js';
 import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { normalizeContactNumber } from '../utils/contactNumber.js';
+import { accessSummary, coursePricing } from '../utils/coursePricing.js';
+import { isProductSaleActive, productPricing, stockSummary } from '../utils/productPricing.js';
 
 const userRoles = ['user', 'student', 'consultant', 'partner', 'admin'];
-const adminCreatedUserRoles = ['user', 'consultant', 'partner'];
+const adminCreatedUserRoles = ['user', 'consultant', 'partner', 'admin'];
 const userStatuses = ['active', 'suspended', 'pending'];
 const inquiryStatuses = ['new', 'in_review', 'responded', 'closed'];
 const inquiryPriorities = ['low', 'normal', 'high'];
 const consultationStatuses = ['pending', 'confirmed', 'completed', 'cancelled'];
 const orderStatuses = ['pending', 'payment_initialized', 'verified', 'paid', 'failed', 'refunded'];
 const articleStatuses = ['draft', 'published'];
-const productStatuses = ['draft', 'published', 'archived'];
+const productStatuses = ['draft', 'published', 'unpublished', 'archived'];
 
 const pagination = ({ page = 1, limit = 25, maxLimit = 100 } = {}) => {
   const safeLimit = Math.min(Math.max(Number(limit) || 25, 1), maxLimit);
@@ -60,8 +64,6 @@ const compactString = (value, maxLength = 240) => {
   if (value == null) return '';
   return String(value).trim().slice(0, maxLength);
 };
-
-const normalizeContactNumber = (value) => compactString(value, 80);
 
 const assertFullName = (name) => {
   const value = compactString(name, 120).replace(/\s+/g, ' ');
@@ -122,7 +124,8 @@ export const overview = asyncHandler(async (req, res) => {
     activeCartItems,
     subscribers,
     inquiries,
-    activeEnrollments
+    activeEnrollments,
+    pendingReviewGroups
   ] = await Promise.all([
     User.countDocuments({ role: publicUserRoleQuery }),
     User.countDocuments({ role: 'consultant' }),
@@ -142,10 +145,16 @@ export const overview = asyncHandler(async (req, res) => {
     Enrollment.countDocuments({
       status: 'active',
       $or: [{ expiresAt: { $exists: false } }, { expiresAt: null }, { expiresAt: { $gt: new Date() } }]
-    })
+    }),
+    Course.aggregate([
+      { $unwind: '$reviews' },
+      { $match: { 'reviews.status': 'pending' } },
+      { $count: 'count' }
+    ])
   ]);
 
   const revenue = orders.reduce((sum, order) => sum + order.amount, 0);
+  const pendingReviews = pendingReviewGroups[0]?.count || 0;
 
   res.json({
     students,
@@ -165,6 +174,7 @@ export const overview = asyncHandler(async (req, res) => {
     subscribers,
     inquiries,
     activeEnrollments,
+    pendingReviews,
     revenue
   });
 });
@@ -336,7 +346,7 @@ export const createUser = asyncHandler(async (req, res) => {
   }
 
   if (!adminCreatedUserRoles.includes(normalizedRole)) {
-    throw new ApiError(400, 'Admin-created accounts must be users, consultants, or partners');
+    throw new ApiError(400, 'Admin-created accounts must be users, consultants, partners, or admins');
   }
 
   if (!userStatuses.includes(normalizedStatus)) {
@@ -617,12 +627,15 @@ export const grantEnrollment = asyncHandler(async (req, res) => {
 });
 
 export const listPayments = asyncHandler(async (req, res) => {
-  const { status, provider, search, page, limit } = req.query;
+  const { status, provider, search, itemType, productType, fulfillmentStatus, page, limit } = req.query;
   const { currentPage, safeLimit, skip } = pagination({ page, limit });
   const query = {};
 
   if (status) query.status = status;
   if (provider) query.provider = provider;
+  if (itemType) query.itemType = itemType;
+  if (productType) query.productType = productType;
+  if (fulfillmentStatus) query.fulfillmentStatus = fulfillmentStatus;
 
   let matchingCourseIds;
   let matchingProductIds;
@@ -650,7 +663,7 @@ export const listPayments = asyncHandler(async (req, res) => {
     Order.find(query)
       .populate('user', 'name email role')
       .populate('course', 'title slug')
-      .populate('product', 'title slug sku')
+      .populate('product', 'title slug sku productType')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(safeLimit),
@@ -694,22 +707,58 @@ export const updatePayment = asyncHandler(async (req, res) => {
       order.accessGrantedAt = new Date();
     }
 
-    if (order.itemType === 'product' && !order.fulfilledAt) {
-      if (order.product) {
+    if (order.itemType === 'product' && !order.fulfilledAt && order.product) {
+      if (order.product.productType === 'digital') {
+        await DigitalEntitlement.findOneAndUpdate(
+          { user: order.user._id, product: order.product._id },
+          {
+            $set: {
+              user: order.user._id,
+              product: order.product._id,
+              order: order._id,
+              status: 'active',
+              source: 'admin',
+              grantedAt: new Date(),
+              revokedAt: undefined,
+              revokeReason: undefined
+            }
+          },
+          { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+        order.accessGrantedAt = order.accessGrantedAt || new Date();
+        order.fulfilledAt = order.fulfilledAt || new Date();
+        order.digitalFulfillmentStatus = 'ready';
+        order.fulfillmentStatus = 'digital_ready';
+      } else {
+        const quantity = Math.max(1, order.quantity || 1);
         const productUpdates = {
           $inc: {
-            soldCount: order.quantity || 1
+            soldCount: quantity
           }
         };
 
         if (order.product.inventory?.track) {
-          productUpdates.$inc['inventory.quantity'] = -Math.max(1, order.quantity || 1);
+          productUpdates.$inc['inventory.quantity'] = -quantity;
+          const updated = await Product.findOneAndUpdate(
+            {
+              _id: order.product._id,
+              ...(order.product.inventory.allowBackorder ? {} : { 'inventory.quantity': { $gte: quantity } })
+            },
+            productUpdates,
+            { new: true }
+          );
+          if (!updated) {
+            order.fulfillmentStatus = 'inventory_exception';
+          } else {
+            order.fulfilledAt = order.fulfilledAt || new Date();
+            order.fulfillmentStatus = 'pending';
+          }
+        } else {
+          await Product.findByIdAndUpdate(order.product._id, productUpdates);
+          order.fulfilledAt = order.fulfilledAt || new Date();
+          order.fulfillmentStatus = 'pending';
         }
-
-        await Product.findByIdAndUpdate(order.product._id, productUpdates);
       }
-
-      order.fulfilledAt = new Date();
     }
   }
 
@@ -745,7 +794,7 @@ export const updatePayment = asyncHandler(async (req, res) => {
   const populatedOrder = await Order.findById(order._id)
     .populate('user', 'name email role')
     .populate('course', 'title slug')
-    .populate('product', 'title slug sku');
+    .populate('product', 'title slug sku productType');
 
   res.json({ order: populatedOrder });
 });
@@ -822,30 +871,288 @@ export const updateConsultation = asyncHandler(async (req, res) => {
 });
 
 export const listContent = asyncHandler(async (req, res) => {
-  const [courses, articles, products] = await Promise.all([
-    Course.find().sort({ createdAt: -1 }),
+  const [courses, articles, products, enrollments, paidOrders] = await Promise.all([
+    Course.find().sort({ updatedAt: -1 }),
     BlogPost.find().sort({ publishedAt: -1 }),
-    Product.find().sort({ createdAt: -1 })
+    Product.find().sort({ createdAt: -1 }),
+    Enrollment.find({ status: 'active' }).select('course'),
+    Order.find({ itemType: 'course', status: 'paid' }).select('course amount currency')
   ]);
 
-  res.json({ courses, articles, products });
+  const enrollmentCounts = enrollments.reduce((map, enrollment) => {
+    const key = enrollment.course?.toString();
+    if (key) map.set(key, (map.get(key) || 0) + 1);
+    return map;
+  }, new Map());
+  const revenueByCourse = paidOrders.reduce((map, order) => {
+    const key = order.course?.toString();
+    if (key) map.set(key, (map.get(key) || 0) + Number(order.amount || 0));
+    return map;
+  }, new Map());
+
+  res.json({
+    courses: courses.map((course) => {
+      const data = course.toObject();
+      const lessons = (data.modules || []).flatMap((module) => module.lessons || []);
+      return {
+        ...data,
+        pricing: coursePricing(data),
+        accessDuration: accessSummary(data),
+        moduleCount: data.modules?.length || 0,
+        lessonCount: lessons.length,
+        enrollmentCount: enrollmentCounts.get(data._id.toString()) || data.studentsEnrolled || 0,
+        revenue: revenueByCourse.get(data._id.toString()) || 0,
+        pendingReviewCount: (data.reviews || []).filter((review) => review.status === 'pending').length
+      };
+    }),
+    articles,
+    products: products.map((product) => {
+      const data = product.toObject();
+      return {
+        ...data,
+        pricing: productPricing(data),
+        stock: stockSummary(data)
+      };
+    })
+  });
 });
 
-export const createProduct = asyncHandler(async (req, res) => {
-  if (req.body.status && !productStatuses.includes(req.body.status)) {
-    throw new ApiError(400, 'Invalid product status');
+export const listProductsAdmin = asyncHandler(async (req, res) => {
+  const {
+    search,
+    category,
+    productType,
+    status,
+    stock,
+    featured,
+    sale,
+    sort = 'updated',
+    page,
+    limit
+  } = req.query;
+  const { currentPage, safeLimit, skip } = pagination({ page, limit });
+  const query = {
+    ...textSearch(search, ['title', 'description', 'shortDescription', 'category', 'subcategory', 'brand', 'sku'])
+  };
+
+  if (category) query.category = category;
+  if (productType) query.productType = productType;
+  if (status) query.status = status;
+  if (featured === 'true') query.isFeatured = true;
+  if (sale === 'hot') query.isHotSale = true;
+  if (sale === 'discount') query['discount.enabled'] = true;
+  if (sale === 'flash') query['flashSale.enabled'] = true;
+  if (stock === 'out') {
+    query.productType = 'physical';
+    query['inventory.track'] = true;
+    query['inventory.quantity'] = { $lte: 0 };
+  }
+  if (stock === 'low') {
+    query.productType = 'physical';
+    query['inventory.track'] = true;
+    query.$expr = {
+      $and: [
+        { $gt: ['$inventory.quantity', 0] },
+        { $lte: ['$inventory.quantity', { $ifNull: ['$inventory.lowStockThreshold', 5] }] }
+      ]
+    };
   }
 
-  const product = await Product.create(req.body);
+  const sortMap = {
+    newest: { createdAt: -1 },
+    oldest: { createdAt: 1 },
+    priceAsc: { price: 1 },
+    priceDesc: { price: -1 },
+    bestSelling: { soldCount: -1 },
+    stock: { 'inventory.quantity': -1 },
+    updated: { updatedAt: -1 }
+  };
+
+  const [products, total, productOrders] = await Promise.all([
+    Product.find(query)
+      .sort(sortMap[sort] || sortMap.updated)
+      .skip(skip)
+      .limit(safeLimit),
+    Product.countDocuments(query),
+    Order.find({ itemType: 'product', status: 'paid' }).select('product amount quantity')
+  ]);
+
+  const revenueByProduct = productOrders.reduce((map, order) => {
+    const key = order.product?.toString();
+    if (key) map.set(key, (map.get(key) || 0) + Number(order.amount || 0));
+    return map;
+  }, new Map());
+  const orderCountByProduct = productOrders.reduce((map, order) => {
+    const key = order.product?.toString();
+    if (key) map.set(key, (map.get(key) || 0) + 1);
+    return map;
+  }, new Map());
+
+  res.json({
+    products: products.map((product) => {
+      const data = product.toObject();
+      return {
+        ...data,
+        pricing: productPricing(data),
+        stock: stockSummary(data),
+        flashSaleActive: isProductSaleActive(data.flashSale),
+        revenue: revenueByProduct.get(data._id.toString()) || 0,
+        orderCount: orderCountByProduct.get(data._id.toString()) || 0
+      };
+    }),
+    pagination: {
+      page: currentPage,
+      limit: safeLimit,
+      total,
+      pages: Math.max(Math.ceil(total / safeLimit), 1)
+    }
+  });
+});
+
+export const listReviews = asyncHandler(async (req, res) => {
+  const { status = 'pending' } = req.query;
+  const courses = await Course.find(status ? { 'reviews.status': status } : { 'reviews.0': { $exists: true } })
+    .populate('reviews.student', 'name email avatar role')
+    .sort({ updatedAt: -1 });
+
+  const reviews = courses.flatMap((course) =>
+    (course.reviews || [])
+      .filter((review) => !status || review.status === status)
+      .map((review) => ({
+        _id: review._id,
+        course: {
+          _id: course._id,
+          title: course.title,
+          slug: course.slug
+        },
+        rating: review.rating,
+        comment: review.comment,
+        status: review.status || 'approved',
+        displayNamePublic: review.displayNamePublic !== false,
+        anonymous: Boolean(review.anonymous),
+        reviewer: {
+          _id: review.student?._id,
+          name: review.student?.name || review.studentName,
+          email: review.student?.email,
+          avatar: review.student?.avatar || review.avatar
+        },
+        createdAt: review.createdAt,
+        moderatedAt: review.moderatedAt
+      }))
+  );
+
+  res.json({ reviews });
+});
+
+export const moderateReview = asyncHandler(async (req, res) => {
+  const { status } = req.body;
+  if (!['approved', 'declined'].includes(status)) {
+    throw new ApiError(400, 'Review status must be approved or declined');
+  }
+
+  const course = await Course.findById(req.params.courseId);
+  if (!course) {
+    throw new ApiError(404, 'Course not found');
+  }
+
+  const review = course.reviews.id(req.params.reviewId);
+  if (!review) {
+    throw new ApiError(404, 'Review not found');
+  }
+
+  review.status = status;
+  review.moderatedBy = req.user._id;
+  review.moderatedAt = new Date();
+
+  const approved = (course.reviews || []).filter((item) => !item.status || item.status === 'approved');
+  course.rating = approved.length
+    ? Number((approved.reduce((sum, item) => sum + Number(item.rating || 0), 0) / approved.length).toFixed(1))
+    : 0;
+  await course.save();
+
+  res.json({ review, courseId: course._id });
+});
+
+const normalizeProductInput = (body = {}) => {
+  const next = { ...body };
+  const isPublishing = next.status === 'published';
+
+  if (!String(next.title || '').trim()) {
+    next.title = isPublishing ? '' : `Untitled product ${Date.now()}`;
+  }
+  if (!String(next.description || '').trim() && !isPublishing) {
+    next.description = 'Draft product description';
+  }
+  if (!String(next.category || '').trim() && !isPublishing) {
+    next.category = 'Uncategorized';
+  }
+  if (!next.productType) next.productType = 'physical';
+  if (next.productType === 'digital') {
+    next.inventory = { ...(next.inventory || {}), track: false };
+    next.shipping = { ...(next.shipping || {}), requiresShipping: false };
+  }
+  if (next.inventory) {
+    next.inventory.quantity = Math.max(0, Number(next.inventory.quantity || 0));
+    next.inventory.lowStockThreshold = Math.max(0, Number(next.inventory.lowStockThreshold ?? 5));
+  }
+
+  return next;
+};
+
+const productPublishIssues = (body = {}) => {
+  const issues = [];
+
+  if (!String(body.title || '').trim()) issues.push('Add a product name');
+  if (!String(body.description || '').trim()) issues.push('Add a product description');
+  if (!String(body.category || '').trim()) issues.push('Choose a product category');
+  if (!String(body.thumbnail || '').trim()) issues.push('Add a product image');
+  if (Number(body.price || 0) < 0) issues.push('Set a valid product price');
+  if (body.productType === 'digital' && !(body.digitalAssets || []).some((asset) => String(asset.url || '').trim())) {
+    issues.push('Add at least one protected digital file');
+  }
+  if (body.productType === 'physical' && body.inventory?.track && Number(body.inventory.quantity || 0) < 0) {
+    issues.push('Stock quantity cannot be negative');
+  }
+
+  return issues;
+};
+
+export const createProduct = asyncHandler(async (req, res) => {
+  const body = normalizeProductInput(req.body);
+  if (body.status && !productStatuses.includes(body.status)) {
+    throw new ApiError(400, 'Invalid product status');
+  }
+  const issues = body.status === 'published' ? productPublishIssues(body) : [];
+  if (issues.length) {
+    throw new ApiError(400, `Product is not ready to publish: ${issues.join(', ')}`);
+  }
+
+  const product = await Product.create(body);
   res.status(201).json({ product });
 });
 
 export const updateProduct = asyncHandler(async (req, res) => {
-  if (req.body.status && !productStatuses.includes(req.body.status)) {
+  const body = normalizeProductInput(req.body);
+  if (body.status && !productStatuses.includes(body.status)) {
     throw new ApiError(400, 'Invalid product status');
   }
+  const issues = body.status === 'published' ? productPublishIssues(body) : [];
+  if (issues.length) {
+    throw new ApiError(400, `Product is not ready to publish: ${issues.join(', ')}`);
+  }
 
-  const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
+  const existing = await Product.findById(req.params.id);
+  if (!existing) {
+    throw new ApiError(404, 'Product not found');
+  }
+  if (body.productType && body.productType !== existing.productType) {
+    const orderCount = await Order.countDocuments({ itemType: 'product', product: existing._id });
+    if (orderCount > 0) {
+      throw new ApiError(400, 'Product type cannot be changed after purchases exist');
+    }
+  }
+
+  const product = await Product.findByIdAndUpdate(req.params.id, body, {
     new: true,
     runValidators: true
   });

@@ -1,12 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Award, BookOpen, CalendarDays, FileText, MessageSquare } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Award, BookOpen, CalendarDays, FileText, MessageSquare, PlayCircle } from 'lucide-react';
 import { DashboardShell } from '../components/DashboardShell.jsx';
 import { MetricCard } from '../components/MetricCard.jsx';
-import { CourseCard } from '../components/CourseCard.jsx';
 import { getDashboard } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const courseFromProgress = (item) => item.course;
+const formatDate = (value) => (value ? new Date(value).toLocaleDateString() : '');
+
+const accessCopy = (enrollment) => {
+  if (!enrollment?.expiresAt) return 'Lifetime access';
+  return `Access until ${formatDate(enrollment.expiresAt)}`;
+};
 
 export const StudentDashboard = () => {
   const { user } = useAuth();
@@ -19,13 +25,25 @@ export const StudentDashboard = () => {
   }, []);
 
   const progress = dashboard?.progress || [];
+  const enrollments = dashboard?.enrollments || [];
   const orders = dashboard?.orders || user?.orders || [];
   const certificates = dashboard?.certificates || [];
   const consultations = dashboard?.consultations || [];
   const comments = dashboard?.comments || [];
   const cartItems = dashboard?.cartItems || [];
   const hasAccountActivity = consultations.length || comments.length || cartItems.length;
-  const activeCourses = progress.map(courseFromProgress).filter(Boolean);
+  const progressByCourse = useMemo(
+    () =>
+      progress.reduce((map, item) => {
+        const key = item.course?._id || item.course?.id || item.course?.slug;
+        if (key) map.set(String(key), item);
+        return map;
+      }, new Map()),
+    [progress]
+  );
+  const activeCourses = enrollments.length
+    ? enrollments.map((enrollment) => enrollment.course).filter(Boolean)
+    : progress.map(courseFromProgress).filter(Boolean);
   const averageProgress = useMemo(() => {
     if (!progress.length) return 0;
     return Math.round(progress.reduce((sum, item) => sum + (item.percentComplete || 0), 0) / progress.length);
@@ -46,11 +64,36 @@ export const StudentDashboard = () => {
         <h2>
           <BookOpen size={20} /> My courses
         </h2>
-        {activeCourses.length ? (
-          <div className="course-grid compact-grid">
-            {activeCourses.map((course) => (
-              <CourseCard key={course.slug || course._id} course={course} />
-            ))}
+        {enrollments.length ? (
+          <div className="learner-course-list">
+            {enrollments.map((enrollment) => {
+              const course = enrollment.course || {};
+              const progressItem =
+                progressByCourse.get(String(course._id || course.id || course.slug)) ||
+                progress.find((item) => item.course?.slug === course.slug);
+              const percent = progressItem?.percentComplete || 0;
+
+              return (
+                <article className="learner-course-card" key={enrollment._id || course.slug || course._id}>
+                  <img src={course.thumbnail || '/favicon.png'} alt="" loading="lazy" decoding="async" />
+                  <div>
+                    <strong>{course.title || 'PlaneForge course'}</strong>
+                    <span>{course.instructorName || 'PlaneForge Academy'}</span>
+                    <div className="progress-row compact">
+                      <div>
+                        <i style={{ width: `${percent}%` }} />
+                      </div>
+                      <strong>{percent}%</strong>
+                    </div>
+                    <small>{accessCopy(enrollment)}</small>
+                  </div>
+                  <Link className="button primary small" to={`/learn/${course.slug}`}>
+                    <PlayCircle size={16} />
+                    Continue
+                  </Link>
+                </article>
+              );
+            })}
           </div>
         ) : (
           <p>No verified course access yet.</p>

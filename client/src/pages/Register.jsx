@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AlertCircle, CheckCircle, KeyRound, RefreshCw, UserPlus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { PasswordField } from '../components/PasswordField.jsx';
+import { PhoneNumberField } from '../components/PhoneNumberField.jsx';
+import { getContactNumberError } from '../utils/contactNumber.js';
 
 const today = new Date().toISOString().slice(0, 10);
 
@@ -33,9 +35,17 @@ export const Register = () => {
       return;
     }
 
-    if (!challenge && (!form.contactNumber.trim() || !form.dateOfBirth)) {
-      setError('Contact number and date of birth are required.');
-      return;
+    if (!challenge) {
+      const contactNumberError = getContactNumberError(form.contactNumber);
+      if (contactNumberError) {
+        setError(contactNumberError);
+        return;
+      }
+
+      if (!form.dateOfBirth) {
+        setError('Date of birth is required.');
+        return;
+      }
     }
 
     setBusy(true);
@@ -117,15 +127,11 @@ export const Register = () => {
                   required
                 />
               </label>
-              <label>
-                Contact number
-                <input
-                  value={form.contactNumber}
-                  onChange={(event) => setForm({ ...form, contactNumber: event.target.value })}
-                  type="tel"
-                  required
-                />
-              </label>
+              <PhoneNumberField
+                value={form.contactNumber}
+                onChange={(contactNumber) => setForm({ ...form, contactNumber })}
+                required
+              />
               <label>
                 Date of birth
                 <input

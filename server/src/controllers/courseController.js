@@ -1,10 +1,12 @@
 import { Course } from '../models/Course.js';
 import { CourseComment } from '../models/CourseComment.js';
+import { Progress } from '../models/Progress.js';
 import { User } from '../models/User.js';
-import { hasCourseAccess } from '../services/accessService.js';
+import { grantCourseAccess, hasCourseAccess } from '../services/accessService.js';
 import { createDirectUploadIntent, createPlaybackGrant, refreshMuxLessonStream } from '../services/streamingService.js';
 import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { accessSummary, coursePricing } from '../utils/coursePricing.js';
 
 const sortMap = {
   popular: { studentsEnrolled: -1 },
@@ -15,13 +17,30 @@ const sortMap = {
   alphabetical: { title: 1 }
 };
 
-const publicResource = (resource) => ({
+const publicReview = (review) => {
+  const data = review.toObject ? review.toObject() : review;
+  const anonymous = Boolean(data.anonymous) || data.displayNamePublic === false;
+  const name = anonymous ? 'Anonymous' : String(data.studentName || 'Learner').split(' ')[0];
+
+  return {
+    _id: data._id,
+    studentName: name,
+    avatar: anonymous ? '' : data.avatar,
+    rating: data.rating,
+    comment: data.comment,
+    createdAt: data.createdAt
+  };
+};
+
+const publicResource = (resource, includeUrl = false) => ({
   label: resource.label,
   type: resource.type,
-  downloadable: Boolean(resource.downloadable)
+  size: resource.size,
+  downloadable: Boolean(resource.downloadable),
+  ...(includeUrl ? { url: resource.url } : {})
 });
 
-const publicLesson = (lesson) => {
+const publicLesson = (lesson, includeProtected = false) => {
   const data = lesson.toObject ? lesson.toObject() : lesson;
   const stream = data.stream || {};
 
@@ -33,7 +52,7 @@ const publicLesson = (lesson) => {
     durationSeconds: data.durationSeconds,
     isPreview: data.isPreview,
     order: data.order,
-    resources: data.resources?.map(publicResource) || [],
+    resources: data.resources?.map((resource) => publicResource(resource, includeProtected)) || [],
     stream: {
       provider: stream.provider,
       status: stream.status,
@@ -45,21 +64,37 @@ const publicLesson = (lesson) => {
 
 const publicCourse = (course, extra = {}) => {
   const data = course.toObject ? course.toObject() : course;
+  const includeProtected = extra.access === 'unlocked';
+  const approvedReviews = (data.reviews || []).filter((review) => !review.status || review.status === 'approved');
+
   return {
     ...data,
     ...extra,
+    pricing: coursePricing(data),
+    accessDuration: accessSummary(data),
+    reviews: approvedReviews.map(publicReview),
     resources: data.resources?.map((resource) => ({
       label: resource.label,
-      type: resource.type
+      type: resource.type,
+      size: resource.size,
+      downloadable: Boolean(resource.downloadable),
+      ...(includeProtected ? { url: resource.url } : {})
     })),
     modules: data.modules?.map((module) => ({
       _id: module._id,
       title: module.title,
       description: module.description,
       order: module.order,
-      lessons: module.lessons?.map(publicLesson) || []
+      lessons: module.lessons?.map((lesson) => publicLesson(lesson, includeProtected)) || []
     }))
   };
+};
+
+const refreshCourseRating = async (course) => {
+  const approved = (course.reviews || []).filter((review) => !review.status || review.status === 'approved');
+  course.rating = approved.length
+    ? Number((approved.reduce((sum, review) => sum + Number(review.rating || 0), 0) / approved.length).toFixed(1))
+    : 0;
 };
 
 const findLesson = (course, lessonId) => {
@@ -71,6 +106,42 @@ const findLesson = (course, lessonId) => {
   }
 
   return null;
+};
+
+const normalizeCourseInput = (body = {}) => {
+  const next = { ...body };
+  const isPublishing = next.status === 'published';
+
+  if (!String(next.title || '').trim()) {
+    next.title = isPublishing ? '' : `Untitled course ${Date.now()}`;
+  }
+  if (!String(next.description || '').trim() && !isPublishing) {
+    next.description = 'Draft course description';
+  }
+  if (!String(next.category || '').trim() && !isPublishing) {
+    next.category = 'Uncategorized';
+  }
+  if (!String(next.discipline || '').trim() && !isPublishing) {
+    next.discipline = 'General';
+  }
+
+  return next;
+};
+
+const publishIssues = (body = {}) => {
+  const modules = body.modules || [];
+  const lessons = modules.flatMap((module) => module.lessons || []);
+  const issues = [];
+
+  if (!String(body.title || '').trim()) issues.push('Add a course title');
+  if (!String(body.description || '').trim()) issues.push('Add a course description');
+  if (!String(body.category || '').trim()) issues.push('Choose a course category');
+  if (!String(body.discipline || '').trim()) issues.push('Choose a course discipline');
+  if (!String(body.thumbnail || '').trim()) issues.push('Add a course thumbnail');
+  if (!modules.length) issues.push('Add at least one module');
+  if (!lessons.length) issues.push('Add at least one lesson');
+
+  return issues;
 };
 
 export const listCourses = asyncHandler(async (req, res) => {
@@ -150,7 +221,7 @@ export const getCourse = asyncHandler(async (req, res) => {
 });
 
 export const getLearningCourse = asyncHandler(async (req, res) => {
-  const course = await Course.findOne({ slug: req.params.slug, status: 'published' }).populate(
+  const course = await Course.findOne({ slug: req.params.slug, status: { $ne: 'archived' } }).populate(
     'instructor',
     'name avatar title specialty bio qualifications experienceYears'
   );
@@ -165,11 +236,12 @@ export const getLearningCourse = asyncHandler(async (req, res) => {
     throw new ApiError(403, 'Purchase this course to unlock protected lessons');
   }
 
-  res.json({ course: publicCourse(course, { access: 'unlocked' }) });
+  const progress = await Progress.findOne({ user: req.user._id, course: course._id });
+  res.json({ course: publicCourse(course, { access: 'unlocked', progress }) });
 });
 
 export const getLessonPlayback = asyncHandler(async (req, res) => {
-  const course = await Course.findOne({ slug: req.params.slug, status: 'published' });
+  const course = await Course.findOne({ slug: req.params.slug, status: { $ne: 'archived' } });
 
   if (!course) {
     throw new ApiError(404, 'Course not found');
@@ -249,20 +321,112 @@ export const createCourseComment = asyncHandler(async (req, res) => {
   res.status(201).json({ comment });
 });
 
+export const enrollFreeCourse = asyncHandler(async (req, res) => {
+  const course = await Course.findOne({ slug: req.params.slug, status: 'published' });
+
+  if (!course) {
+    throw new ApiError(404, 'Course not found');
+  }
+
+  const pricing = coursePricing(course);
+  if (!pricing.isFree) {
+    throw new ApiError(402, 'Payment is required for this course');
+  }
+
+  const enrollment = await grantCourseAccess({
+    userId: req.user._id,
+    course,
+    source: 'free_course',
+    price: 0
+  });
+
+  res.status(201).json({ enrollment, course: publicCourse(course, { access: 'unlocked' }) });
+});
+
+export const submitCourseReview = asyncHandler(async (req, res) => {
+  const course = await Course.findOne({ slug: req.params.slug, status: { $ne: 'archived' } });
+
+  if (!course) {
+    throw new ApiError(404, 'Course not found');
+  }
+
+  const canAccess = await hasCourseAccess({ user: req.user, courseId: course._id });
+  if (!canAccess) {
+    throw new ApiError(403, 'Complete enrollment before reviewing this course');
+  }
+
+  const progress = await Progress.findOne({ user: req.user._id, course: course._id });
+  if (!progress?.completedAt && Number(progress?.percentComplete || 0) < 100) {
+    throw new ApiError(403, 'Complete the course before submitting a review');
+  }
+
+  const rating = Math.min(Math.max(Number(req.body.rating || 0), 1), 5);
+  const comment = String(req.body.comment || '').trim();
+  if (!comment) {
+    throw new ApiError(400, 'Review text is required');
+  }
+
+  const existing = course.reviews.find((review) => review.student?.toString() === req.user._id.toString());
+  const reviewData = {
+    student: req.user._id,
+    studentName: req.user.name,
+    avatar: req.user.avatar,
+    occupation: req.user.title || req.user.role,
+    rating,
+    comment,
+    displayNamePublic: req.body.displayNamePublic !== false,
+    anonymous: req.body.displayNamePublic === false || Boolean(req.body.anonymous),
+    status: 'pending',
+    moderatedBy: undefined,
+    moderatedAt: undefined
+  };
+
+  if (existing) {
+    Object.assign(existing, reviewData);
+  } else {
+    course.reviews.push(reviewData);
+  }
+
+  await refreshCourseRating(course);
+  await course.save();
+
+  res.status(201).json({
+    message: 'Review submitted for moderation.',
+    review: {
+      rating,
+      comment,
+      status: 'pending',
+      displayNamePublic: reviewData.displayNamePublic
+    }
+  });
+});
+
 export const createCourse = asyncHandler(async (req, res) => {
-  const instructor = req.body.instructor ? await User.findById(req.body.instructor) : null;
+  const body = normalizeCourseInput(req.body);
+  const issues = body.status === 'published' ? publishIssues(body) : [];
+  if (issues.length) {
+    throw new ApiError(400, `Course is not ready to publish: ${issues.join(', ')}`);
+  }
+
+  const instructor = body.instructor ? await User.findById(body.instructor) : null;
 
   const course = await Course.create({
-    ...req.body,
+    ...body,
     instructor: instructor?._id,
-    instructorName: req.body.instructorName || instructor?.name
+    instructorName: body.instructorName || instructor?.name
   });
 
   res.status(201).json({ course });
 });
 
 export const updateCourse = asyncHandler(async (req, res) => {
-  const course = await Course.findByIdAndUpdate(req.params.id, req.body, {
+  const body = normalizeCourseInput(req.body);
+  const issues = body.status === 'published' ? publishIssues(body) : [];
+  if (issues.length) {
+    throw new ApiError(400, `Course is not ready to publish: ${issues.join(', ')}`);
+  }
+
+  const course = await Course.findByIdAndUpdate(req.params.id, body, {
     new: true,
     runValidators: true
   });

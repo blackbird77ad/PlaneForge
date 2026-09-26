@@ -26,7 +26,7 @@ const faqs = [
   {
     question: 'Can PlaneForge support more than 1,000 learners from launch?',
     answer:
-      'The public catalog, account flow, checkout, dashboards, and content structure are designed for large learner cohorts and future catalog growth.'
+      'The public catalog, account flow, checkout, dashboards, and content structure are designed for large user cohorts and future catalog growth.'
   },
   {
     question: 'Do courses include certificates?',
@@ -66,11 +66,13 @@ const helpCards = [
   }
 ];
 
+const contactEmailText = 'admin@planeforge.org or planeforge1@gmail.com';
+
 const terms = [
   {
     title: 'Accounts',
     text:
-      'Learners are responsible for keeping account credentials private. One verified account session is intended for the enrolled learner.'
+      'Users are responsible for keeping account credentials private. One verified account session is intended for the account owner.'
   },
   {
     title: 'Course Access',
@@ -108,7 +110,7 @@ const privacy = [
   {
     title: 'Contact',
     text:
-      'Privacy questions can be sent through the contact page or by email to planeforge1@gmail.com.'
+      `Privacy questions can be sent through the contact page or by email to ${contactEmailText}.`
   }
 ];
 
@@ -169,7 +171,7 @@ export const Faq = () => (
     <PageHero
       eyebrow="FAQ"
       title="Answers before you enroll, book, or build"
-      text="Quick answers about PCB courses, certificates, consulting, payments, and learner access."
+      text="Quick answers about PCB courses, certificates, consulting, payments, and user access."
       icon={BookOpen}
     />
     <section className="section public-section">
@@ -209,7 +211,7 @@ export const Help = () => (
       </div>
       <div className="support-strip">
         <Mail size={22} />
-        <span>Email PlaneForge directly at planeforge1@gmail.com</span>
+        <span>Email PlaneForge directly at {contactEmailText}</span>
         <Link className="button primary small" to="/contact">
           Contact
         </Link>
@@ -271,7 +273,7 @@ export const Testimonials = () => (
   <main className="public-page testimonials-page">
     <PageHero
       eyebrow="Testimonials"
-      title="Learners use PlaneForge to build repeatable PCB skill"
+      title="Users use PlaneForge to build repeatable PCB skill"
       text="Stories from students, developers, and hardware teams using project-based PCB courses."
       icon={Award}
     />

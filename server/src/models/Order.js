@@ -32,6 +32,78 @@ const orderSchema = new mongoose.Schema(
       default: 1,
       min: 1
     },
+    items: [
+      {
+        itemType: {
+          type: String,
+          enum: ['course', 'product']
+        },
+        course: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'Course'
+        },
+        product: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'Product'
+        },
+        title: String,
+        slug: String,
+        sku: String,
+        productType: {
+          type: String,
+          enum: ['physical', 'digital']
+        },
+        quantity: {
+          type: Number,
+          default: 1,
+          min: 1
+        },
+        originalUnitPrice: Number,
+        unitPrice: Number,
+        discountAmount: Number,
+        lineTotal: Number,
+        currency: String
+      }
+    ],
+    productType: {
+      type: String,
+      enum: ['physical', 'digital']
+    },
+    originalAmount: Number,
+    discountAmount: {
+      type: Number,
+      default: 0
+    },
+    unitPrice: Number,
+    productSnapshot: {
+      title: String,
+      slug: String,
+      sku: String,
+      productType: String,
+      thumbnail: String,
+      category: String
+    },
+    pricingSnapshot: mongoose.Schema.Types.Mixed,
+    shippingAddress: {
+      fullName: String,
+      phone: String,
+      addressLine1: String,
+      addressLine2: String,
+      city: String,
+      region: String,
+      country: String,
+      postalCode: String
+    },
+    fulfillmentStatus: {
+      type: String,
+      enum: ['not_required', 'pending', 'processing', 'shipped', 'delivered', 'digital_ready', 'inventory_exception', 'cancelled'],
+      default: 'not_required'
+    },
+    digitalFulfillmentStatus: {
+      type: String,
+      enum: ['not_required', 'pending', 'ready', 'revoked'],
+      default: 'not_required'
+    },
     amount: {
       type: Number,
       required: true

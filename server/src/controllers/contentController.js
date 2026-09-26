@@ -48,7 +48,6 @@ export const submitContactInquiry = asyncHandler(async (req, res) => {
     name,
     email,
     organization,
-    role,
     subject,
     message
   } = req.body;
@@ -66,10 +65,9 @@ export const submitContactInquiry = asyncHandler(async (req, res) => {
     name,
     email,
     organization,
-    role,
     subject,
     message,
-    priority: ['b2b', 'consulting', 'collaboration', 'partnership'].includes(intent)
+    priority: ['quote', 'issue', 'consulting', 'collaboration'].includes(intent)
       ? 'high'
       : 'normal',
     ipAddress: req.ip || req.socket?.remoteAddress,
@@ -77,7 +75,7 @@ export const submitContactInquiry = asyncHandler(async (req, res) => {
   });
 
   res.status(201).json({
-    message: 'Inquiry received. PlaneForge will review it by category and respond by email.',
+    message: 'Inquiry received. PlaneForge will review it by request type and respond by email.',
     inquiry: {
       id: inquiry._id,
       intent: inquiry.intent,

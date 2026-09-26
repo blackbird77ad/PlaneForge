@@ -4,7 +4,9 @@ import { CartItem } from '../models/CartItem.js';
 import { Consultation } from '../models/Consultation.js';
 import { CourseComment } from '../models/CourseComment.js';
 import { Course } from '../models/Course.js';
+import { DigitalEntitlement } from '../models/DigitalEntitlement.js';
 import { Earning } from '../models/Earning.js';
+import { Enrollment } from '../models/Enrollment.js';
 import { Order } from '../models/Order.js';
 import { ProfileChangeChallenge } from '../models/ProfileChangeChallenge.js';
 import { Progress } from '../models/Progress.js';
@@ -15,6 +17,9 @@ import { sendProfileChangeCodeEmail } from '../services/emailService.js';
 import { requestEarningWithdrawal } from '../services/revenueService.js';
 import { ApiError } from '../utils/apiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { normalizeContactNumber } from '../utils/contactNumber.js';
+import { coursePricing } from '../utils/coursePricing.js';
+import { productPricing, stockSummary } from '../utils/productPricing.js';
 
 const accountRole = (role) => (['student', 'learner', 'buyer'].includes(role) ? 'user' : role);
 
@@ -27,9 +32,25 @@ const profileChangeExpiry = () => new Date(Date.now() + 10 * 60 * 1000);
 
 const populateCart = (query) =>
   query
-    .populate('course', 'title slug thumbnail price currency')
-    .populate('product', 'title slug thumbnail price currency sku')
+    .populate('course', 'title slug thumbnail price currency discount accessDurationType accessDurationDays')
+    .populate('product', 'title slug thumbnail price currency sku productType inventory discount flashSale isHotSale')
     .populate('order', 'invoiceNumber status');
+
+const decorateCartItem = (item) => {
+  const data = item.toObject ? item.toObject() : item;
+  const pricing =
+    data.itemType === 'product' && data.product
+      ? productPricing(data.product)
+      : data.itemType === 'course' && data.course
+        ? coursePricing(data.course)
+        : null;
+
+  return {
+    ...data,
+    pricing,
+    stock: data.itemType === 'product' && data.product ? stockSummary(data.product) : undefined
+  };
+};
 
 const findLesson = (course, lessonId) => {
   for (const module of course.modules || []) {
@@ -46,8 +67,6 @@ const compactString = (value, maxLength = 240) => {
   if (value == null) return '';
   return String(value).trim().slice(0, maxLength);
 };
-
-const normalizeContactNumber = (value) => compactString(value, 80);
 
 const parseDateOfBirth = (value) => {
   const rawDate = compactString(value, 40);
@@ -262,12 +281,21 @@ export const confirmProfileChange = asyncHandler(async (req, res) => {
 
 export const dashboard = asyncHandler(async (req, res) => {
   if (accountRole(req.user.role) === 'user') {
-    const [progress, orders, consultations, certificates, comments, cartItems] = await Promise.all([
+    const [progress, enrollments, orders, digitalProducts, consultations, certificates, comments, cartItems] = await Promise.all([
       Progress.find({ user: req.user._id }).populate(
         'course',
-        'title slug thumbnail instructorName duration'
+        'title slug thumbnail instructorName duration price currency accessDurationType accessDurationDays'
       ),
-      Order.find({ user: req.user._id }).populate('course', 'title slug thumbnail').sort({ createdAt: -1 }),
+      Enrollment.find({ user: req.user._id })
+        .populate('course', 'title slug thumbnail instructorName duration price currency accessDurationType accessDurationDays')
+        .sort({ updatedAt: -1 }),
+      Order.find({ user: req.user._id })
+        .populate('course', 'title slug thumbnail')
+        .populate('product', 'title slug thumbnail sku productType')
+        .sort({ createdAt: -1 }),
+      DigitalEntitlement.find({ user: req.user._id, status: 'active' })
+        .populate('product', 'title slug thumbnail sku productType category')
+        .sort({ updatedAt: -1 }),
       Consultation.find({ student: req.user._id }).populate('consultant', 'name title specialty avatar'),
       Certificate.find({ user: req.user._id }).populate('course', 'title slug'),
       CourseComment.find({ user: req.user._id })
@@ -277,7 +305,17 @@ export const dashboard = asyncHandler(async (req, res) => {
       populateCart(CartItem.find({ user: req.user._id }).sort({ updatedAt: -1 }).limit(20))
     ]);
 
-    return res.json({ role: 'user', progress, orders, consultations, certificates, comments, cartItems });
+    return res.json({
+      role: 'user',
+      progress,
+      enrollments,
+      orders,
+      digitalProducts,
+      consultations,
+      certificates,
+      comments,
+      cartItems: cartItems.map(decorateCartItem)
+    });
   }
 
   if (req.user.role === 'consultant') {
@@ -349,7 +387,7 @@ export const listCartItems = asyncHandler(async (req, res) => {
 
   const cartItems = await populateCart(CartItem.find(query).sort({ updatedAt: -1 }));
 
-  res.json({ cartItems });
+  res.json({ cartItems: cartItems.map(decorateCartItem) });
 });
 
 export const addCartItem = asyncHandler(async (req, res) => {
@@ -378,6 +416,14 @@ export const addCartItem = asyncHandler(async (req, res) => {
     if (!product || product.status !== 'published') {
       throw new ApiError(404, 'Product not found');
     }
+    const stock = stockSummary(product);
+    const safeQuantity = Math.max(1, Number(quantity || 1));
+    if (!stock.canPurchase) {
+      throw new ApiError(409, 'Product is out of stock');
+    }
+    if (product.productType !== 'digital' && product.inventory?.track && !product.inventory.allowBackorder && safeQuantity > Number(product.inventory.quantity || 0)) {
+      throw new ApiError(409, 'Requested quantity is not available');
+    }
   }
 
   const lookup =
@@ -395,7 +441,10 @@ export const addCartItem = asyncHandler(async (req, res) => {
         productId: itemType === 'product' ? productId : undefined,
         productName: itemType === 'product' ? product.title : undefined,
         quantity: Math.max(1, Number(quantity || 1)),
-        unitPrice: itemType === 'product' ? product.price || Number(unitPrice || 0) : course?.price || 0,
+        unitPrice:
+          itemType === 'product'
+            ? productPricing(product).finalPrice ?? Number(unitPrice || 0)
+            : coursePricing(course).finalPrice ?? course?.price ?? 0,
         currency: itemType === 'product' ? product.currency || currency || 'USD' : course?.currency || 'USD',
         status: 'active',
         source
@@ -404,10 +453,10 @@ export const addCartItem = asyncHandler(async (req, res) => {
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
-  await item.populate('course', 'title slug thumbnail price currency');
-  await item.populate('product', 'title slug thumbnail price currency sku');
+  await item.populate('course', 'title slug thumbnail price currency discount accessDurationType accessDurationDays');
+  await item.populate('product', 'title slug thumbnail price currency sku productType inventory discount flashSale isHotSale');
 
-  res.status(201).json({ cartItem: item });
+  res.status(201).json({ cartItem: decorateCartItem(item) });
 });
 
 export const removeCartItem = asyncHandler(async (req, res) => {
@@ -520,6 +569,9 @@ export const saveLessonProgress = asyncHandler(async (req, res) => {
   progress.percentComplete = totalLessons
     ? Math.min(Math.round((progress.completedLessons.length / totalLessons) * 100), 100)
     : 0;
+  if (progress.percentComplete === 100 && !progress.completedAt) {
+    progress.completedAt = new Date();
+  }
 
   let certificate = null;
   if (progress.percentComplete === 100 && course.certificateAvailable && !progress.certificateIssued) {

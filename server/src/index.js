@@ -8,6 +8,7 @@ import { connectDb, databaseStatus, isDbConnected, startDbReconnectLoop } from '
 import { env } from './config/env.js';
 import { adminRoutes } from './routes/adminRoutes.js';
 import { authRoutes } from './routes/authRoutes.js';
+import { careerRoutes } from './routes/careerRoutes.js';
 import { consultationRoutes } from './routes/consultationRoutes.js';
 import { contentRoutes } from './routes/contentRoutes.js';
 import { courseRoutes } from './routes/courseRoutes.js';
@@ -90,6 +91,7 @@ const requireDatabase = (req, res, next) => {
 
 app.use('/api', requireDatabase);
 app.use('/api/auth', authRoutes);
+app.use('/api/careers', careerRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/consultations', consultationRoutes);
 app.use('/api/payments', orderRoutes);

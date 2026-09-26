@@ -20,8 +20,17 @@ const enrollmentSchema = new mongoose.Schema(
     },
     accessType: {
       type: String,
-      enum: ['one_time', 'subscription', 'admin_grant'],
+      enum: ['one_time', 'subscription', 'lifetime', 'limited', 'admin_grant'],
       default: 'one_time'
+    },
+    accessDurationDays: Number,
+    purchasedPrice: {
+      type: Number,
+      default: 0
+    },
+    currency: {
+      type: String,
+      default: 'USD'
     },
     status: {
       type: String,

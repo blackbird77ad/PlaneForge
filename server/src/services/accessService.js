@@ -2,6 +2,7 @@ import { Enrollment } from '../models/Enrollment.js';
 import { Course } from '../models/Course.js';
 import { Progress } from '../models/Progress.js';
 import { User } from '../models/User.js';
+import { accessSummary, coursePricing } from '../utils/coursePricing.js';
 
 export const isEnrollmentActive = (enrollment) =>
   Boolean(
@@ -24,11 +25,13 @@ export const hasCourseAccess = async ({ user, courseId }) => {
   return isEnrollmentActive(enrollment);
 };
 
-export const grantCourseAccess = async ({ userId, course, order, source = 'payment_webhook' }) => {
-  const accessType = course.purchaseType === 'subscription' ? 'subscription' : 'one_time';
+export const grantCourseAccess = async ({ userId, course, order, source = 'payment_webhook', price }) => {
+  const access = accessSummary(course);
+  const pricing = coursePricing(course);
+  const accessType = access.type === 'limited' ? 'limited' : 'lifetime';
   const expiresAt =
-    accessType === 'subscription' && course.subscriptionDurationDays
-      ? new Date(Date.now() + course.subscriptionDurationDays * 24 * 60 * 60 * 1000)
+    access.type === 'limited' && access.days
+      ? new Date(Date.now() + access.days * 24 * 60 * 60 * 1000)
       : undefined;
   const existing = await Enrollment.findOne({ user: userId, course: course._id });
 
@@ -40,6 +43,9 @@ export const grantCourseAccess = async ({ userId, course, order, source = 'payme
         course: course._id,
         order: order?._id,
         accessType,
+        accessDurationDays: access.days,
+        purchasedPrice: Number(price ?? order?.amount ?? pricing.finalPrice ?? 0),
+        currency: course.currency || 'USD',
         status: 'active',
         startsAt: new Date(),
         expiresAt,

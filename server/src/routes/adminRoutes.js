@@ -14,8 +14,10 @@ import {
   listEarnings,
   listExpenses,
   listPayments,
-  listSettings,
+  listProductsAdmin,
+  listReviews,
   listUsers,
+  moderateReview,
   overview,
   updateArticle,
   updateConsultation,
@@ -24,8 +26,16 @@ import {
   updatePayment,
   updateProduct,
   updateUser,
-  upsertSetting
 } from '../controllers/adminController.js';
+import {
+  createCareerPositionAdmin,
+  duplicateCareerPositionAdmin,
+  getCareerDocumentAdmin,
+  listCareerApplicationsAdmin,
+  listCareerPositionsAdmin,
+  updateCareerApplicationAdmin,
+  updateCareerPositionAdmin
+} from '../controllers/careerController.js';
 import { allowRoles, protect } from '../middleware/auth.js';
 
 export const adminRoutes = Router();
@@ -46,13 +56,21 @@ adminRoutes.post('/expenses', createExpense);
 adminRoutes.patch('/expenses/:id', updateExpense);
 adminRoutes.get('/earnings', listEarnings);
 adminRoutes.get('/content', listContent);
+adminRoutes.get('/reviews', listReviews);
+adminRoutes.patch('/reviews/:courseId/:reviewId', moderateReview);
+adminRoutes.get('/products', listProductsAdmin);
 adminRoutes.post('/products', createProduct);
 adminRoutes.patch('/products/:id', updateProduct);
 adminRoutes.delete('/products/:id', archiveProduct);
+adminRoutes.get('/careers/positions', listCareerPositionsAdmin);
+adminRoutes.post('/careers/positions', createCareerPositionAdmin);
+adminRoutes.patch('/careers/positions/:id', updateCareerPositionAdmin);
+adminRoutes.post('/careers/positions/:id/duplicate', duplicateCareerPositionAdmin);
+adminRoutes.get('/careers/applications', listCareerApplicationsAdmin);
+adminRoutes.patch('/careers/applications/:id', updateCareerApplicationAdmin);
+adminRoutes.get('/careers/applications/:id/documents/:documentId', getCareerDocumentAdmin);
 adminRoutes.post('/articles', createArticle);
 adminRoutes.patch('/articles/:id', updateArticle);
 adminRoutes.delete('/articles/:id', archiveArticle);
 adminRoutes.get('/inquiries', listInquiries);
 adminRoutes.patch('/inquiries/:id', updateInquiry);
-adminRoutes.get('/settings', listSettings);
-adminRoutes.put('/settings', upsertSetting);

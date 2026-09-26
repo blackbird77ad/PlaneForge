@@ -1,16 +1,13 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { KeyRound, LogIn, RotateCcw, ShieldCheck, UserPlus } from 'lucide-react';
+import { KeyRound, LogIn, RotateCcw, ShieldCheck } from 'lucide-react';
 import { AdminDashboard } from './AdminDashboard.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { PasswordField } from '../components/PasswordField.jsx';
 
-const today = new Date().toISOString().slice(0, 10);
-
 const initialForms = {
   login: { email: '', password: '' },
-  signup: { name: '', email: '', contactNumber: '', dateOfBirth: '', password: '', adminSetupCode: '' },
-  reset: { email: '', code: '', password: '', confirmPassword: '' }
+  reset: { email: '', code: '', resetToken: '', password: '', confirmPassword: '' }
 };
 
 const dashboardPath = (role) =>
@@ -22,9 +19,9 @@ export const AdminAccess = () => {
     finishPasswordReset,
     login,
     logout,
-    register,
     startPasswordReset,
     user,
+    verifyPasswordResetCode,
     verifyLogin
   } = useAuth();
   const [mode, setMode] = useState('login');
@@ -81,41 +78,6 @@ export const AdminAccess = () => {
     }
   };
 
-  const submitSignup = async (event) => {
-    event.preventDefault();
-    setError('');
-    setMessage('');
-
-    if (!challenge && forms.signup.password.length < 8) {
-      setError('Use at least 8 characters.');
-      return;
-    }
-
-    if (!challenge && (!forms.signup.contactNumber.trim() || !forms.signup.dateOfBirth)) {
-      setError('Contact number and date of birth are required.');
-      return;
-    }
-
-    setBusy(true);
-    try {
-      if (!challenge) {
-        const nextChallenge = await register({
-          ...forms.signup,
-          role: 'admin'
-        });
-        setChallenge(nextChallenge);
-        setCode('');
-      } else {
-        await verifyLogin({ challengeId: challenge.challengeId, code });
-        navigate('/dashboard/admin', { replace: true });
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const submitReset = async (event) => {
     event.preventDefault();
     setError('');
@@ -126,7 +88,19 @@ export const AdminAccess = () => {
       if (resetStep === 'request') {
         const data = await startPasswordReset({ email: forms.reset.email, role: 'admin' });
         setMessage(data.message);
-        setResetStep('complete');
+        setResetStep('verify');
+        return;
+      }
+
+      if (resetStep === 'verify') {
+        const data = await verifyPasswordResetCode({
+          email: forms.reset.email,
+          role: 'admin',
+          code: forms.reset.code
+        });
+        update('reset', 'resetToken', data.resetToken || '');
+        setMessage(data.message || 'Reset code verified. Set a new password now.');
+        setResetStep('password');
         return;
       }
 
@@ -143,7 +117,7 @@ export const AdminAccess = () => {
       const data = await finishPasswordReset({
         email: forms.reset.email,
         role: 'admin',
-        code: forms.reset.code,
+        resetToken: forms.reset.resetToken,
         password: forms.reset.password
       });
       setMessage(data.message);
@@ -181,16 +155,13 @@ export const AdminAccess = () => {
         <p>
           {challenge
             ? 'Enter the one-time code sent to the admin email address.'
-            : 'Admin sign in, setup, and password reset live only on this private URL.'}
+            : 'Admin sign in and password reset live only on this private URL. New admins are created from the admin dashboard.'}
         </p>
 
         {!challenge && (
           <div className="admin-auth-tabs" role="tablist" aria-label="Admin auth mode">
             <button className={mode === 'login' ? 'active' : ''} type="button" onClick={() => switchMode('login')}>
               Sign In
-            </button>
-            <button className={mode === 'signup' ? 'active' : ''} type="button" onClick={() => switchMode('signup')}>
-              Sign Up
             </button>
             <button className={mode === 'reset' ? 'active' : ''} type="button" onClick={() => switchMode('reset')}>
               Reset
@@ -237,78 +208,6 @@ export const AdminAccess = () => {
           </form>
         )}
 
-        {mode === 'signup' && (
-          <form onSubmit={submitSignup}>
-            {!challenge ? (
-              <>
-                <label>
-                  Full name
-                  <input
-                    value={forms.signup.name}
-                    onChange={(event) => update('signup', 'name', event.target.value)}
-                    required
-                  />
-                </label>
-                <label>
-                  Admin email
-                  <input
-                    value={forms.signup.email}
-                    onChange={(event) => update('signup', 'email', event.target.value)}
-                    type="email"
-                    required
-                  />
-                </label>
-                <PasswordField
-                  value={forms.signup.password}
-                  onChange={(event) => update('signup', 'password', event.target.value)}
-                  autoComplete="new-password"
-                />
-                <label>
-                  Contact number
-                  <input
-                    value={forms.signup.contactNumber}
-                    onChange={(event) => update('signup', 'contactNumber', event.target.value)}
-                    type="tel"
-                    required
-                  />
-                </label>
-                <label>
-                  Date of birth
-                  <input
-                    value={forms.signup.dateOfBirth}
-                    onChange={(event) => update('signup', 'dateOfBirth', event.target.value)}
-                    type="date"
-                    max={today}
-                    required
-                  />
-                </label>
-                <PasswordField
-                  label="Admin setup code"
-                  value={forms.signup.adminSetupCode}
-                  onChange={(event) => update('signup', 'adminSetupCode', event.target.value)}
-                  autoComplete="one-time-code"
-                />
-              </>
-            ) : (
-              <label>
-                Verification code
-                <input
-                  value={code}
-                  onChange={(event) => setCode(event.target.value)}
-                  inputMode="numeric"
-                  maxLength={6}
-                  required
-                />
-              </label>
-            )}
-            {error && <p className="form-error">{error}</p>}
-            <button className="button primary full" type="submit" disabled={busy}>
-              {challenge ? <KeyRound size={18} /> : <UserPlus size={18} />}
-              {busy ? 'Please wait' : challenge ? 'Verify Admin' : 'Create Admin'}
-            </button>
-          </form>
-        )}
-
         {mode === 'reset' && (
           <form onSubmit={submitReset}>
             <label>
@@ -318,20 +217,26 @@ export const AdminAccess = () => {
                 onChange={(event) => update('reset', 'email', event.target.value)}
                 type="email"
                 required
-                disabled={resetStep === 'complete'}
+                disabled={resetStep !== 'request'}
               />
             </label>
-            {resetStep === 'complete' && (
+            {resetStep === 'verify' && (
+              <label>
+                Reset code
+                <input
+                  value={forms.reset.code}
+                  onChange={(event) => update('reset', 'code', event.target.value)}
+                  inputMode="numeric"
+                  maxLength={6}
+                  required
+                />
+              </label>
+            )}
+            {resetStep === 'password' && (
               <>
                 <label>
-                  Reset code
-                  <input
-                    value={forms.reset.code}
-                    onChange={(event) => update('reset', 'code', event.target.value)}
-                    inputMode="numeric"
-                    maxLength={6}
-                    required
-                  />
+                  Verified reset code
+                  <input value={forms.reset.code} readOnly disabled />
                 </label>
                 <PasswordField
                   label="New password"
@@ -351,7 +256,13 @@ export const AdminAccess = () => {
             {error && <p className="form-error">{error}</p>}
             <button className="button primary full" type="submit" disabled={busy}>
               {resetStep === 'request' ? <RotateCcw size={18} /> : <ShieldCheck size={18} />}
-              {busy ? 'Please wait' : resetStep === 'request' ? 'Send Reset Code' : 'Reset Admin Password'}
+              {busy
+                ? 'Please wait'
+                : resetStep === 'request'
+                  ? 'Send Reset Code'
+                  : resetStep === 'verify'
+                    ? 'Verify Code'
+                    : 'Reset Admin Password'}
             </button>
           </form>
         )}
